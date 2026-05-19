@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased scroll-smooth;
+  }
+
+  body {
+    @apply bg-ink-50 text-ink-900 font-sans min-h-screen;
+  }
+
+  ::selection {
+    @apply bg-accent-light text-ink-950;
+  }
+}
+
+@layer components {
+  .field-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-ink-500;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-low {
+    @apply bg-ink-100 text-ink-600;
+  }
+
+  .badge-medium {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .badge-high {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+}
