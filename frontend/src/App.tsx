@@ -1,18 +1,55 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BookOpen } from "lucide-react";
 import { analyzePdf } from "./api/analyze";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
+import { clearSession, loadSession, saveSession } from "./lib/session";
 import type { TabId, TrialData } from "./types/trial";
 
+function getInitialState() {
+  const session = loadSession();
+  if (!session) {
+    return {
+      data: null as TrialData | null,
+      outline: null as TrialData["outline"] | null,
+      activeTab: "scenes" as TabId,
+      lastFileName: null as string | null,
+      lastFileSize: null as number | null,
+    };
+  }
+  return {
+    data: session.data,
+    outline: session.outline ?? session.data.outline,
+    activeTab: session.activeTab,
+    lastFileName: session.fileName ?? null,
+    lastFileSize: session.fileSize ?? null,
+  };
+}
+
 export default function App() {
+  const initial = getInitialState();
   const [file, setFile] = useState<File | null>(null);
+  const [lastFileName, setLastFileName] = useState<string | null>(initial.lastFileName);
+  const [lastFileSize, setLastFileSize] = useState<number | null>(initial.lastFileSize);
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<TrialData | null>(null);
-  const [outline, setOutline] = useState<TrialData["outline"] | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("scenes");
+  const [data, setData] = useState<TrialData | null>(initial.data);
+  const [outline, setOutline] = useState<TrialData["outline"] | null>(initial.outline);
+  const [activeTab, setActiveTab] = useState<TabId>(initial.activeTab);
+
+  const hasResults = Boolean(data && outline);
+
+  useEffect(() => {
+    if (!data || !outline) return;
+    saveSession({
+      data,
+      outline,
+      activeTab,
+      fileName: file?.name ?? lastFileName ?? undefined,
+      fileSize: file?.size ?? lastFileSize ?? undefined,
+    });
+  }, [data, outline, activeTab, file, lastFileName, lastFileSize]);
 
   const handleGenerate = useCallback(async () => {
     if (!file) return;
@@ -22,6 +59,8 @@ export default function App() {
       const result = await analyzePdf(file, apiKey);
       setData(result);
       setOutline(result.outline);
+      setLastFileName(file.name);
+      setLastFileSize(file.size);
       setActiveTab("scenes");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed.");
@@ -29,6 +68,25 @@ export default function App() {
       setIsLoading(false);
     }
   }, [file, apiKey]);
+
+  const handleClear = useCallback(() => {
+    clearSession();
+    setFile(null);
+    setLastFileName(null);
+    setLastFileSize(null);
+    setData(null);
+    setOutline(null);
+    setActiveTab("scenes");
+    setError(null);
+  }, []);
+
+  const handleFileChange = useCallback((next: File | null) => {
+    setFile(next);
+    if (next) {
+      setLastFileName(next.name);
+      setLastFileSize(next.size);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -51,12 +109,16 @@ export default function App() {
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-10">
         <UploadPanel
           file={file}
-          onFileChange={setFile}
+          lastFileName={lastFileName}
+          lastFileSize={lastFileSize}
+          onFileChange={handleFileChange}
           apiKey={apiKey}
           onApiKeyChange={setApiKey}
           onGenerate={handleGenerate}
+          onClear={handleClear}
           isLoading={isLoading}
           error={error}
+          canClear={hasResults || Boolean(file) || Boolean(lastFileName)}
         />
 
         {isLoading && (
@@ -75,17 +137,17 @@ export default function App() {
           </div>
         )}
 
-        {data && outline && !isLoading && (
+        {hasResults && !isLoading && (
           <ResultsPanel
-            data={data}
+            data={data!}
             activeTab={activeTab}
             onTabChange={setActiveTab}
-            outline={outline}
+            outline={outline!}
             onOutlineChange={setOutline}
           />
         )}
 
-        {!data && !isLoading && (
+        {!hasResults && !isLoading && (
           <section className="grid gap-4 sm:grid-cols-3 text-center">
             {[
               {

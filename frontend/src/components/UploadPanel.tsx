@@ -5,32 +5,45 @@ import {
   FileText,
   KeyRound,
   Sparkles,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
 
 type Props = {
   file: File | null;
+  lastFileName: string | null;
+  lastFileSize: number | null;
   onFileChange: (file: File | null) => void;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
   onGenerate: () => void;
+  onClear: () => void;
   isLoading: boolean;
   error: string | null;
+  canClear: boolean;
 };
 
 export function UploadPanel({
   file,
+  lastFileName,
+  lastFileSize,
   onFileChange,
   apiKey,
   onApiKeyChange,
   onGenerate,
+  onClear,
   isLoading,
   error,
+  canClear,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showKey, setShowKey] = useState(false);
+
+  const displayName = file?.name ?? lastFileName;
+  const displaySize = file?.size ?? lastFileSize;
+  const hasFileDisplay = Boolean(displayName);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -76,7 +89,7 @@ export function UploadPanel({
             ${
               dragOver
                 ? "border-accent bg-accent-light/50 scale-[1.01]"
-                : file
+                : hasFileDisplay
                   ? "border-emerald-300 bg-emerald-50/40"
                   : "border-ink-200 hover:border-ink-300 hover:bg-ink-50/50"
             }
@@ -90,26 +103,35 @@ export function UploadPanel({
             onChange={handleFileInput}
           />
 
-          {file ? (
+          {hasFileDisplay ? (
             <>
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                 <FileText className="h-6 w-6" />
               </div>
-              <p className="mt-3 font-medium text-ink-900">{file.name}</p>
+              <p className="mt-3 font-medium text-ink-900">{displayName}</p>
               <p className="text-sm text-ink-500">
-                {(file.size / 1024).toFixed(1)} KB · PDF ready
+                {displaySize != null
+                  ? `${(displaySize / 1024).toFixed(1)} KB · PDF ready`
+                  : "PDF"}
+                {!file && lastFileName && (
+                  <span className="block text-xs text-ink-400 mt-0.5">
+                    Restored from last session — re-upload to run again
+                  </span>
+                )}
               </p>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFileChange(null);
-                }}
-                className="mt-3 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-accent transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-                Remove file
-              </button>
+              {file && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFileChange(null);
+                  }}
+                  className="mt-3 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-accent transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Remove file
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -171,27 +193,42 @@ export function UploadPanel({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={!file || isLoading}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5
-            text-sm font-semibold text-white shadow-md
-            hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed
-            transition-all active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2"
-        >
-          {isLoading ? (
-            <>
-              <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              Analyzing manuscript…
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Generate analysis
-            </>
-          )}
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={!file || isLoading}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5
+              text-sm font-semibold text-white shadow-md
+              hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed
+              transition-all active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2"
+          >
+            {isLoading ? (
+              <>
+                <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Analyzing manuscript…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Generate analysis
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={!canClear || isLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-200 bg-white px-5 py-3.5
+              text-sm font-semibold text-ink-700 shadow-sm
+              hover:bg-ink-50 hover:border-ink-300 disabled:opacity-50 disabled:cursor-not-allowed
+              transition-all focus:outline-none focus:ring-2 focus:ring-ink-200 focus:ring-offset-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear
+          </button>
+        </div>
       </div>
     </section>
   );
