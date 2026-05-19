@@ -33,8 +33,8 @@ function SceneCard({ scene }: { scene: SceneSummary }) {
 
       {open && (
         <div className="px-5 pb-5 pt-0 grid gap-4 sm:grid-cols-2 border-t border-ink-100">
-          <Field label="Setting" icon={<MapPin className="h-3.5 w-3.5" />} value={scene.setting} />
-          <Field label="POV" value={scene.pov} />
+          <Field label="Setting" icon={<MapPin className="h-3.5 w-3.5" />} value={scene.setting} className="pt-5" />
+          <Field label="POV" value={scene.pov} className="pt-5" />
           <Field
             label="Characters"
             icon={<Users className="h-3.5 w-3.5" />}
