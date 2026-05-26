@@ -4,6 +4,7 @@ import os
 from openai import OpenAI
 
 from services.names import extract_script_name_context, sanitize_analysis_names
+from services.openai_retry import call_with_retry
 
 ANALYSIS_MODES = ("linear_choice_1", "full_branching")
 
@@ -143,7 +144,8 @@ def analyze_fiction(
         else SYSTEM_PROMPT_LINEAR
     )
 
-    client = OpenAI(api_key=api_key)
+    timeout = float(os.getenv("OPENAI_TIMEOUT", "300"))
+    client = OpenAI(api_key=api_key, timeout=timeout)
     truncated = _truncate(text)
 
     name_ctx = extract_script_name_context(truncated)
@@ -155,14 +157,17 @@ def analyze_fiction(
         script_name_context=script_name_context,
     )
 
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-5.5"),
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
-        temperature=1.0,
+    response = call_with_retry(
+        lambda: client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-5.5"),
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=1.0,
+        ),
+        label="fiction analysis",
     )
 
     raw = response.choices[0].message.content or "{}"

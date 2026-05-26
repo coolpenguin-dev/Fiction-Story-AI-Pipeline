@@ -54,6 +54,7 @@ export type IngestionRecommendation = {
 
 export type StoryAnalysis = {
   storyId?: string;
+  sourceFileName?: string;
   storyTitle: string;
   analysisMode?: AnalysisMode;
   canonicalPathNote?: string;
@@ -72,3 +73,24 @@ export type TabId =
   | "outline"
   | "relationships"
   | "ingestion";
+
+export type CorpusEntry = {
+  fileName: string;
+  fileSize?: number;
+  data: StoryAnalysis;
+  outline: OutlineDraft;
+};
+
+export type BatchStoryResult = {
+  fileName: string;
+  ok: boolean;
+  data?: StoryAnalysis;
+  error?: string;
+};
+
+export type BatchAnalyzeResponse = {
+  results: BatchStoryResult[];
+  summary: { total: number; succeeded: number; failed: number };
+};
+
+export const MAX_CORPUS_FILES = 5;

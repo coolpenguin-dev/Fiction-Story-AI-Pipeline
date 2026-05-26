@@ -32,10 +32,12 @@ Open [http://localhost:5173](http://localhost:5173). The dev server proxies `/ap
 
 ## Usage
 
-1. Upload a **text-based** fiction PDF (max 20 MB).
+1. Upload **1–5 text-based** fiction PDFs (max 20 MB each) — your POC corpus.
 2. Enter your **OpenAI API key** (or set `OPENAI_API_KEY` in `backend/.env`).
-3. Click **Generate analysis**.
-4. Browse tabs: Scenes, Patterns, Outline (editable), Relationships, Storage (Pinecone).
+3. Click **Analyze** — each story is analyzed and upserted to Pinecone.
+4. Switch between stories in the corpus picker; browse Scenes, Patterns, Outline, Relationships, Storage.
+
+**API:** `POST /api/analyze` (single file) · `POST /api/analyze-batch` (multiple `files` form fields, max 5; processes up to 3 in parallel by default via `ANALYZE_BATCH_CONCURRENCY`).
 
 API keys are sent to the backend for the request only and are **not stored**.
 

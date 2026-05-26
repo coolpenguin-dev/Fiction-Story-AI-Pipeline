@@ -9,31 +9,35 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { MAX_CORPUS_FILES } from "../types/story";
 
 type Props = {
-  file: File | null;
-  lastFileName: string | null;
-  lastFileSize: number | null;
-  onFileChange: (file: File | null) => void;
+  files: File[];
+  onFilesChange: (files: File[]) => void;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
   onGenerate: () => void;
   onClear: () => void;
   isLoading: boolean;
+  loadingLabel?: string | null;
   error: string | null;
   canClear: boolean;
 };
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function UploadPanel({
-  file,
-  lastFileName,
-  lastFileSize,
-  onFileChange,
+  files,
+  onFilesChange,
   apiKey,
   onApiKeyChange,
   onGenerate,
   onClear,
   isLoading,
+  loadingLabel,
   error,
   canClear,
 }: Props) {
@@ -41,33 +45,51 @@ export function UploadPanel({
   const [dragOver, setDragOver] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
-  const displayName = file?.name ?? lastFileName;
-  const displaySize = file?.size ?? lastFileSize;
-  const hasFileDisplay = Boolean(displayName);
+  const atLimit = files.length >= MAX_CORPUS_FILES;
+
+  const addPdfFiles = (incoming: FileList | File[]) => {
+    const pdfs = Array.from(incoming).filter(
+      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")
+    );
+    if (pdfs.length === 0) return;
+
+    const merged: File[] = [...files];
+    for (const pdf of pdfs) {
+      if (merged.length >= MAX_CORPUS_FILES) break;
+      const duplicate = merged.some(
+        (f) => f.name === pdf.name && f.size === pdf.size && f.lastModified === pdf.lastModified
+      );
+      if (!duplicate) merged.push(pdf);
+    }
+    onFilesChange(merged);
+  };
+
+  const removeFile = (index: number) => {
+    onFilesChange(files.filter((_, i) => i !== index));
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped?.type === "application/pdf") {
-      onFileChange(dropped);
-    }
+    addPdfFiles(e.dataTransfer.files);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (selected) onFileChange(selected);
+    if (e.target.files) addPdfFiles(e.target.files);
+    e.target.value = "";
   };
+
+  const hasFiles = files.length > 0;
 
   return (
     <section className="rounded-2xl border border-ink-200/80 bg-white shadow-card overflow-hidden">
       <div className="border-b border-ink-100 bg-gradient-to-r from-ink-50 to-accent-light/30 px-6 py-5">
         <h2 className="font-display text-xl font-semibold text-ink-950">
-          Analyze your manuscript
+          Build your corpus
         </h2>
         <p className="mt-1 text-sm text-ink-600">
-          Upload a fiction PDF. We extract scenes, narrative patterns, an
-          editable outline, relationship arcs, and store vectors in Pinecone.
+          Upload up to {MAX_CORPUS_FILES} fiction PDFs (choice-1 linearized scripts).
+          Each story is analyzed and stored in Pinecone for retrieval.
         </p>
       </div>
 
@@ -75,21 +97,22 @@ export function UploadPanel({
         <div
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
-          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => e.key === "Enter" && !atLimit && inputRef.current?.click()}
+          onClick={() => !atLimit && inputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
-            setDragOver(true);
+            if (!atLimit) setDragOver(true);
           }}
           onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
+          onDrop={atLimit ? undefined : handleDrop}
           className={`
             relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed
-            px-6 py-10 transition-all cursor-pointer
+            px-6 py-10 transition-all
+            ${atLimit ? "cursor-not-allowed opacity-60" : "cursor-pointer"}
             ${
               dragOver
                 ? "border-accent bg-accent-light/50 scale-[1.01]"
-                : hasFileDisplay
+                : hasFiles
                   ? "border-emerald-300 bg-emerald-50/40"
                   : "border-ink-200 hover:border-ink-300 hover:bg-ink-50/50"
             }
@@ -99,39 +122,25 @@ export function UploadPanel({
             ref={inputRef}
             type="file"
             accept="application/pdf"
+            multiple
             className="sr-only"
+            disabled={atLimit}
             onChange={handleFileInput}
           />
 
-          {hasFileDisplay ? (
+          {hasFiles ? (
             <>
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                 <FileText className="h-6 w-6" />
               </div>
-              <p className="mt-3 font-medium text-ink-900">{displayName}</p>
-              <p className="text-sm text-ink-500">
-                {displaySize != null
-                  ? `${(displaySize / 1024).toFixed(1)} KB · PDF ready`
-                  : "PDF"}
-                {!file && lastFileName && (
-                  <span className="block text-xs text-ink-400 mt-0.5">
-                    Restored from last session — re-upload to run again
-                  </span>
-                )}
+              <p className="mt-3 font-medium text-ink-900">
+                {files.length} PDF{files.length === 1 ? "" : "s"} selected
               </p>
-              {file && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onFileChange(null);
-                  }}
-                  className="mt-3 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-accent transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Remove file
-                </button>
-              )}
+              <p className="text-sm text-ink-500">
+                {atLimit
+                  ? `Maximum ${MAX_CORPUS_FILES} files for POC`
+                  : "Drop more PDFs or click to add"}
+              </p>
             </>
           ) : (
             <>
@@ -139,12 +148,40 @@ export function UploadPanel({
                 <Upload className="h-6 w-6" />
               </div>
               <p className="mt-3 font-medium text-ink-900">
-                Drop your PDF here or click to browse
+                Drop PDFs here or click to browse
               </p>
-              <p className="text-sm text-ink-500">Text-based PDF · max 20 MB</p>
+              <p className="text-sm text-ink-500">
+                Up to {MAX_CORPUS_FILES} files · text-based PDF · max 20 MB each
+              </p>
             </>
           )}
         </div>
+
+        {hasFiles && (
+          <ul className="rounded-xl border border-ink-200 divide-y divide-ink-100 overflow-hidden">
+            {files.map((file, index) => (
+              <li
+                key={`${file.name}-${file.size}-${file.lastModified}`}
+                className="flex items-center gap-3 px-4 py-3 bg-white"
+              >
+                <FileText className="h-4 w-4 shrink-0 text-ink-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink-900 truncate">{file.name}</p>
+                  <p className="text-xs text-ink-500">{formatSize(file.size)}</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => removeFile(index)}
+                  className="p-1.5 text-ink-400 hover:text-red-600 transition-colors disabled:opacity-40"
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div>
           <label
@@ -197,7 +234,7 @@ export function UploadPanel({
           <button
             type="button"
             onClick={onGenerate}
-            disabled={!file || isLoading}
+            disabled={files.length === 0 || isLoading}
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5
               text-sm font-semibold text-white shadow-md
               hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed
@@ -206,12 +243,14 @@ export function UploadPanel({
             {isLoading ? (
               <>
                 <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                Analyzing manuscript…
+                {loadingLabel ?? "Analyzing…"}
               </>
             ) : (
               <>
                 <Sparkles className="h-4 w-4" />
-                Generate analysis
+                {files.length <= 1
+                  ? "Analyze manuscript"
+                  : `Analyze ${files.length} manuscripts`}
               </>
             )}
           </button>

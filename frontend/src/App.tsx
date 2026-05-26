@@ -1,91 +1,142 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen } from "lucide-react";
-import { analyzePdf } from "./api/analyze";
+import { analyzePdf, analyzePdfBatch } from "./api/analyze";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
+import { CorpusStoryPicker } from "./components/CorpusStoryPicker";
 import { clearSession, loadSession, saveSession } from "./lib/session";
-import type { TabId, StoryAnalysis } from "./types/story";
+import type { BatchStoryResult, CorpusEntry, TabId } from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
   if (!session) {
     return {
-      data: null as StoryAnalysis | null,
-      outline: null as StoryAnalysis["outline"] | null,
+      corpus: [] as CorpusEntry[],
+      selectedIndex: 0,
       activeTab: "scenes" as TabId,
-      lastFileName: null as string | null,
-      lastFileSize: null as number | null,
     };
   }
   return {
-    data: session.data,
-    outline: session.outline ?? session.data.outline,
+    corpus: session.corpus,
+    selectedIndex: session.selectedIndex,
     activeTab: session.activeTab,
-    lastFileName: session.fileName ?? null,
-    lastFileSize: session.fileSize ?? null,
   };
 }
 
 export default function App() {
   const initial = getInitialState();
-  const [file, setFile] = useState<File | null>(null);
-  const [lastFileName, setLastFileName] = useState<string | null>(initial.lastFileName);
-  const [lastFileSize, setLastFileSize] = useState<number | null>(initial.lastFileSize);
+  const [files, setFiles] = useState<File[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<StoryAnalysis | null>(initial.data);
-  const [outline, setOutline] = useState<StoryAnalysis["outline"] | null>(initial.outline);
+  const [corpus, setCorpus] = useState<CorpusEntry[]>(initial.corpus);
+  const [selectedIndex, setSelectedIndex] = useState(initial.selectedIndex);
   const [activeTab, setActiveTab] = useState<TabId>(initial.activeTab);
+  const [batchFailures, setBatchFailures] = useState<BatchStoryResult[]>([]);
 
-  const hasResults = Boolean(data && outline);
+  const selected = corpus[selectedIndex] ?? null;
+  const hasResults = corpus.length > 0 && Boolean(selected);
+
+  const outlinesByIndex = useMemo(
+    () => corpus.map((e) => e.outline),
+    [corpus]
+  );
 
   useEffect(() => {
-    if (!data || !outline) return;
-    saveSession({
-      data,
-      outline,
-      activeTab,
-      fileName: file?.name ?? lastFileName ?? undefined,
-      fileSize: file?.size ?? lastFileSize ?? undefined,
-    });
-  }, [data, outline, activeTab, file, lastFileName, lastFileSize]);
+    if (corpus.length === 0) return;
+    saveSession({ corpus, selectedIndex, activeTab });
+  }, [corpus, selectedIndex, activeTab]);
 
   const handleGenerate = useCallback(async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setError(null);
+    setBatchFailures([]);
     setIsLoading(true);
+
     try {
-      const result = await analyzePdf(file, apiKey);
-      setData(result);
-      setOutline(result.outline);
-      setLastFileName(file.name);
-      setLastFileSize(file.size);
+      if (files.length === 1) {
+        setLoadingLabel("Analyzing manuscript…");
+        const result = await analyzePdf(files[0], apiKey);
+        const entry: CorpusEntry = {
+          fileName: files[0].name,
+          fileSize: files[0].size,
+          data: result,
+          outline: result.outline,
+        };
+        setCorpus([entry]);
+        setSelectedIndex(0);
+        setActiveTab("scenes");
+        return;
+      }
+
+      setLoadingLabel(`Analyzing ${files.length} manuscripts…`);
+      const batch = await analyzePdfBatch(files, apiKey);
+
+      const succeeded: CorpusEntry[] = [];
+      const failures: BatchStoryResult[] = [];
+
+      for (const item of batch.results) {
+        if (item.ok && item.data) {
+          const match = files.find((f) => f.name === item.fileName);
+          succeeded.push({
+            fileName: item.fileName,
+            fileSize: match?.size,
+            data: item.data,
+            outline: item.data.outline,
+          });
+        } else {
+          failures.push(item);
+        }
+      }
+
+      if (succeeded.length === 0) {
+        const firstErr = failures[0]?.error ?? "All files failed to analyze.";
+        throw new Error(firstErr);
+      }
+
+      setCorpus(succeeded);
+      setSelectedIndex(0);
+      setBatchFailures(failures);
       setActiveTab("scenes");
+
+      if (failures.length > 0) {
+        setError(
+          `${failures.length} of ${batch.summary.total} file(s) failed. See details below.`
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed.");
     } finally {
       setIsLoading(false);
+      setLoadingLabel(null);
     }
-  }, [file, apiKey]);
+  }, [files, apiKey]);
 
   const handleClear = useCallback(() => {
     clearSession();
-    setFile(null);
-    setLastFileName(null);
-    setLastFileSize(null);
-    setData(null);
-    setOutline(null);
+    setFiles([]);
+    setCorpus([]);
+    setSelectedIndex(0);
+    setBatchFailures([]);
     setActiveTab("scenes");
     setError(null);
   }, []);
 
-  const handleFileChange = useCallback((next: File | null) => {
-    setFile(next);
-    if (next) {
-      setLastFileName(next.name);
-      setLastFileSize(next.size);
-    }
+  const handleOutlineChange = useCallback(
+    (outline: CorpusEntry["outline"]) => {
+      setCorpus((prev) =>
+        prev.map((entry, i) =>
+          i === selectedIndex ? { ...entry, outline } : entry
+        )
+      );
+    },
+    [selectedIndex]
+  );
+
+  const handleSelectStory = useCallback((index: number) => {
+    setSelectedIndex(index);
+    setActiveTab("scenes");
   }, []);
 
   return (
@@ -100,7 +151,7 @@ export default function App() {
               Fiction RAG
             </h1>
             <p className="text-xs text-ink-500">
-              Interactive fiction analysis &amp; RAG-assisted writing
+              Interactive fiction corpus · analysis &amp; vector storage
             </p>
           </div>
         </div>
@@ -108,17 +159,16 @@ export default function App() {
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-10">
         <UploadPanel
-          file={file}
-          lastFileName={lastFileName}
-          lastFileSize={lastFileSize}
-          onFileChange={handleFileChange}
+          files={files}
+          onFilesChange={setFiles}
           apiKey={apiKey}
           onApiKeyChange={setApiKey}
           onGenerate={handleGenerate}
           onClear={handleClear}
           isLoading={isLoading}
+          loadingLabel={loadingLabel}
           error={error}
-          canClear={hasResults || Boolean(file) || Boolean(lastFileName)}
+          canClear={hasResults || files.length > 0}
         />
 
         {isLoading && (
@@ -128,39 +178,48 @@ export default function App() {
           >
             <div className="mx-auto h-10 w-10 rounded-full border-2 border-ink-200 border-t-accent animate-spin" />
             <p className="mt-4 font-display text-lg font-semibold text-ink-900">
-              Reading your manuscript…
+              {loadingLabel ?? "Reading manuscripts…"}
             </p>
             <p className="mt-2 text-sm text-ink-500 animate-pulse-soft">
-              Extracting scenes, patterns, outlines, and saving to your vector store.
-              This may take a minute.
+              Extracting scenes, patterns, and saving each story to Pinecone.
+              {files.length > 1 && " This may take several minutes."}
             </p>
           </div>
         )}
 
-        {hasResults && !isLoading && (
-          <ResultsPanel
-            data={data!}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            outline={outline!}
-            onOutlineChange={setOutline}
-          />
+        {hasResults && !isLoading && selected && (
+          <div className="space-y-6">
+            <CorpusStoryPicker
+              corpus={corpus}
+              selectedIndex={selectedIndex}
+              onSelect={handleSelectStory}
+              batchFailures={batchFailures}
+            />
+            <ResultsPanel
+              key={selected.data.storyId ?? selected.fileName}
+              data={selected.data}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              outline={outlinesByIndex[selectedIndex] ?? selected.outline}
+              onOutlineChange={handleOutlineChange}
+            />
+          </div>
         )}
 
         {!hasResults && !isLoading && (
           <section className="grid gap-4 sm:grid-cols-3 text-center">
             {[
               {
-                title: "Scene summaries",
-                desc: "Structured beats per scene for RAG chunks",
+                title: "Multi-story corpus",
+                desc: "Upload 1–5 PDFs for your POC library",
               },
               {
                 title: "Narrative patterns",
-                desc: "Discovered from your text, not preset tropes",
+                desc: "Discovered per story, stored for retrieval",
               },
               {
                 title: "Editable outline",
-                desc: "Premise → chapters → beats at every step",
+                desc: "Premise → chapters → beats per manuscript",
               },
             ].map((item) => (
               <div

@@ -1,10 +1,18 @@
 import os
 import re
+import threading
 import uuid
 from typing import Any
 
 from openai import OpenAI
 from pinecone import Pinecone
+
+from services.openai_retry import call_with_retry
+
+_index_cache: Any | None = None
+_index_lock = threading.Lock()
+_embed_client: OpenAI | None = None
+_embed_lock = threading.Lock()
 
 
 def _slugify(value: str) -> str:
@@ -19,33 +27,60 @@ def build_story_id(story_title: str) -> str:
 
 
 def _get_pinecone_index() -> Any:
-    api_key = os.getenv("PINECONE_API_KEY", "").strip()
-    index_name = os.getenv("PINECONE_INDEX_NAME", "").strip()
-    if not api_key or not index_name:
-        raise RuntimeError("Pinecone not configured: set PINECONE_API_KEY and PINECONE_INDEX_NAME.")
+    global _index_cache
+    if _index_cache is not None:
+        return _index_cache
 
-    pc = Pinecone(api_key=api_key)
+    with _index_lock:
+        if _index_cache is not None:
+            return _index_cache
 
-    # Prefer host targeting if provided; otherwise resolve via describe_index (fine for dev).
-    host = os.getenv("PINECONE_INDEX_HOST", "").strip()
-    if not host:
-        desc = pc.describe_index(name=index_name)
-        host = desc.get("host") if isinstance(desc, dict) else getattr(desc, "host", None)
-    if not host:
-        raise RuntimeError("Could not resolve Pinecone index host. Set PINECONE_INDEX_HOST.")
+        api_key = os.getenv("PINECONE_API_KEY", "").strip()
+        index_name = os.getenv("PINECONE_INDEX_NAME", "").strip()
+        if not api_key or not index_name:
+            raise RuntimeError(
+                "Pinecone not configured: set PINECONE_API_KEY and PINECONE_INDEX_NAME."
+            )
 
-    return pc.Index(host=host)
+        pc = Pinecone(api_key=api_key)
+
+        # Prefer host targeting if provided; otherwise resolve via describe_index (fine for dev).
+        host = os.getenv("PINECONE_INDEX_HOST", "").strip()
+        if not host:
+            desc = pc.describe_index(name=index_name)
+            host = desc.get("host") if isinstance(desc, dict) else getattr(desc, "host", None)
+        if not host:
+            raise RuntimeError("Could not resolve Pinecone index host. Set PINECONE_INDEX_HOST.")
+
+        _index_cache = pc.Index(host=host)
+        return _index_cache
+
+
+def _embedding_client() -> OpenAI:
+    global _embed_client
+    if _embed_client is not None:
+        return _embed_client
+
+    with _embed_lock:
+        if _embed_client is not None:
+            return _embed_client
+
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("OpenAI not configured: set OPENAI_API_KEY.")
+        timeout = float(os.getenv("OPENAI_TIMEOUT", "300"))
+        _embed_client = OpenAI(api_key=api_key, timeout=timeout)
+        return _embed_client
 
 
 def _embed_texts(texts: list[str]) -> list[list[float]]:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("OpenAI not configured: set OPENAI_API_KEY.")
-
-    client = OpenAI(api_key=api_key)
+    client = _embedding_client()
     model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
-    resp = client.embeddings.create(model=model, input=texts)
+    resp = call_with_retry(
+        lambda: client.embeddings.create(model=model, input=texts),
+        label="scene embeddings",
+    )
     # Keep order aligned to inputs
     return [d.embedding for d in resp.data]
 
