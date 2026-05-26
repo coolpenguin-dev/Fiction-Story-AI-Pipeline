@@ -10,6 +10,8 @@ import {
   X,
 } from "lucide-react";
 import { MAX_CORPUS_FILES } from "../types/story";
+import type { HealthResponse } from "../types/story";
+import { IngestionStatusBanner } from "./IngestionStatusBanner";
 
 type Props = {
   files: File[];
@@ -22,6 +24,9 @@ type Props = {
   loadingLabel?: string | null;
   error: string | null;
   canClear: boolean;
+  health: HealthResponse | null;
+  healthLoading: boolean;
+  healthError: string | null;
 };
 
 function formatSize(bytes: number): string {
@@ -40,6 +45,9 @@ export function UploadPanel({
   loadingLabel,
   error,
   canClear,
+  health,
+  healthLoading,
+  healthError,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -94,6 +102,12 @@ export function UploadPanel({
       </div>
 
       <div className="p-6 space-y-5">
+        <IngestionStatusBanner
+          health={health}
+          loading={healthLoading}
+          error={healthError}
+        />
+
         <div
           role="button"
           tabIndex={0}

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen } from "lucide-react";
 import { analyzePdf, analyzePdfBatch } from "./api/analyze";
+import { fetchHealth } from "./api/health";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { CorpusStoryPicker } from "./components/CorpusStoryPicker";
 import { clearSession, loadSession, saveSession } from "./lib/session";
-import type { BatchStoryResult, CorpusEntry, TabId } from "./types/story";
+import type { BatchStoryResult, CorpusEntry, HealthResponse, TabId } from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
@@ -34,6 +35,26 @@ export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(initial.selectedIndex);
   const [activeTab, setActiveTab] = useState<TabId>(initial.activeTab);
   const [batchFailures, setBatchFailures] = useState<BatchStoryResult[]>([]);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [healthError, setHealthError] = useState<string | null>(null);
+
+  const refreshHealth = useCallback(async () => {
+    setHealthLoading(true);
+    setHealthError(null);
+    try {
+      setHealth(await fetchHealth());
+    } catch (e) {
+      setHealthError(e instanceof Error ? e.message : "Health check failed.");
+      setHealth(null);
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshHealth();
+  }, [refreshHealth]);
 
   const selected = corpus[selectedIndex] ?? null;
   const hasResults = corpus.length > 0 && Boolean(selected);
@@ -110,8 +131,9 @@ export default function App() {
     } finally {
       setIsLoading(false);
       setLoadingLabel(null);
+      void refreshHealth();
     }
-  }, [files, apiKey]);
+  }, [files, apiKey, refreshHealth]);
 
   const handleClear = useCallback(() => {
     clearSession();
@@ -169,23 +191,10 @@ export default function App() {
           loadingLabel={loadingLabel}
           error={error}
           canClear={hasResults || files.length > 0}
+          health={health}
+          healthLoading={healthLoading}
+          healthError={healthError}
         />
-
-        {isLoading && (
-          <div
-            className="rounded-2xl border border-ink-200 bg-white p-12 text-center shadow-card"
-            aria-live="polite"
-          >
-            <div className="mx-auto h-10 w-10 rounded-full border-2 border-ink-200 border-t-accent animate-spin" />
-            <p className="mt-4 font-display text-lg font-semibold text-ink-900">
-              {loadingLabel ?? "Reading manuscripts…"}
-            </p>
-            <p className="mt-2 text-sm text-ink-500 animate-pulse-soft">
-              Extracting scenes, patterns, and saving each story to Pinecone.
-              {files.length > 1 && " This may take several minutes."}
-            </p>
-          </div>
-        )}
 
         {hasResults && !isLoading && selected && (
           <div className="space-y-6">

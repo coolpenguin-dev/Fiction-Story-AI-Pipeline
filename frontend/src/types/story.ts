@@ -45,6 +45,31 @@ export type RelationshipRow = {
   notes: string;
 };
 
+export type PineconeStatus = "ok" | "partial" | "skipped" | "error";
+
+export type PineconeInfo = {
+  configured?: boolean | null;
+  status?: PineconeStatus;
+  upserted?: number;
+  expected?: number;
+  namespace?: string;
+  replaced?: boolean;
+  error?: string;
+};
+
+export type HealthResponse = {
+  status: "ok" | "degraded";
+  openai: { configured: boolean; note?: string | null };
+  pinecone: {
+    configured: boolean;
+    reachable?: boolean;
+    namespace?: string;
+    indexName?: string | null;
+    vectorCount?: number;
+    error?: string;
+  };
+};
+
 export type IngestionRecommendation = {
   chunkLevel: string;
   metadataFields: string[];
@@ -64,7 +89,7 @@ export type StoryAnalysis = {
   retrievedExamples: RetrievedExample[];
   relationships: RelationshipRow[];
   ingestion: IngestionRecommendation;
-  pinecone?: { upserted?: number; namespace?: string; error?: string };
+  pinecone?: PineconeInfo;
 };
 
 export type TabId =

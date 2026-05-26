@@ -37,6 +37,10 @@ Open [http://localhost:5173](http://localhost:5173). The dev server proxies `/ap
 3. Click **Analyze** — each story is analyzed and upserted to Pinecone.
 4. Switch between stories in the corpus picker; browse Scenes, Patterns, Outline, Relationships, Storage.
 
+**Re-ingest:** uploading the same PDF again uses a **stable story ID** (from the filename) and **replaces** prior vectors for that story in Pinecone.
+
+**Health:** `GET /api/health` reports OpenAI/Pinecone readiness (configured, reachable, namespace vector count).
+
 **API:** `POST /api/analyze` (single file) · `POST /api/analyze-batch` (multiple `files` form fields, max 5; processes up to 3 in parallel by default via `ANALYZE_BATCH_CONCURRENCY`).
 
 API keys are sent to the backend for the request only and are **not stored**.

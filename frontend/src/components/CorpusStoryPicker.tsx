@@ -32,9 +32,10 @@ export function CorpusStoryPicker({
           >
             {corpus.map((entry, index) => {
               const active = index === selectedIndex;
-              const stored = Boolean(
-                entry.data.pinecone?.upserted && entry.data.pinecone.upserted > 0
-              );
+              const stored =
+                (entry.data.pinecone?.status === "ok" ||
+                  entry.data.pinecone?.status === "partial") &&
+                (entry.data.pinecone?.upserted ?? 0) > 0;
               return (
                 <button
                   key={`${entry.fileName}-${entry.data.storyId ?? index}`}

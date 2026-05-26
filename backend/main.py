@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.analyze_job import analyze_pdf_bytes
+from services.pinecone_store import check_pinecone_health
 
 load_dotenv()
 
@@ -39,7 +40,21 @@ _executor = ThreadPoolExecutor(max_workers=BATCH_CONCURRENCY)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    openai_configured = bool(os.getenv("OPENAI_API_KEY", "").strip())
+    pinecone = check_pinecone_health()
+    ready = openai_configured and (
+        not pinecone.get("configured") or pinecone.get("reachable") is True
+    )
+    return {
+        "status": "ok" if ready else "degraded",
+        "openai": {
+            "configured": openai_configured,
+            "note": None
+            if openai_configured
+            else "Set OPENAI_API_KEY on server or pass key in the upload form.",
+        },
+        "pinecone": pinecone,
+    }
 
 
 def _resolve_api_key(openai_api_key: Optional[str]) -> str:

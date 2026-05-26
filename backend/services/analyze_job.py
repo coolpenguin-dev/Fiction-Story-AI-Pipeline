@@ -1,6 +1,5 @@
 """Shared single-PDF analyze + optional Pinecone persistence."""
 
-import os
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -8,7 +7,7 @@ from fastapi import HTTPException
 from services.analyze import analyze_fiction
 from services.openai_retry import format_analysis_error
 from services.pdf import extract_text_from_pdf
-from services.pinecone_store import build_story_id, upsert_scenes
+from services.pinecone_store import build_story_id, pinecone_namespace, upsert_scenes
 
 MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -53,15 +52,28 @@ def analyze_pdf_bytes(
             raise HTTPException(status_code=402, detail="OpenAI quota exceeded.") from e
         raise HTTPException(status_code=502, detail=format_analysis_error(e)) from e
 
+    result["sourceFileName"] = filename
+
     if persist_to_pinecone:
-        try:
-            story_id = build_story_id(result.get("storyTitle", "Untitled"))
-            pinecone_info = upsert_scenes(result, story_id=story_id)
-            result["storyId"] = story_id
-            result["pinecone"] = pinecone_info
-            result["sourceFileName"] = filename
-        except Exception as e:
-            result["pinecone"] = {"error": str(e)}
-            result["sourceFileName"] = filename
+        story_id = build_story_id(filename, result.get("storyTitle", "Untitled"))
+        pinecone_info = upsert_scenes(
+            result,
+            story_id=story_id,
+            source_filename=filename,
+        )
+        result["storyId"] = story_id
+        result["pinecone"] = pinecone_info
+    else:
+        scenes = result.get("scenes") or []
+        expected = len(scenes) if isinstance(scenes, list) else 0
+        result["pinecone"] = {
+            "configured": None,
+            "status": "skipped",
+            "namespace": pinecone_namespace(),
+            "expected": expected,
+            "upserted": 0,
+            "replaced": False,
+            "error": "Persistence disabled for this request.",
+        }
 
     return result
