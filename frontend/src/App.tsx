@@ -4,14 +4,14 @@ import { analyzePdf } from "./api/analyze";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { clearSession, loadSession, saveSession } from "./lib/session";
-import type { TabId, TrialData } from "./types/trial";
+import type { TabId, StoryAnalysis } from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
   if (!session) {
     return {
-      data: null as TrialData | null,
-      outline: null as TrialData["outline"] | null,
+      data: null as StoryAnalysis | null,
+      outline: null as StoryAnalysis["outline"] | null,
       activeTab: "scenes" as TabId,
       lastFileName: null as string | null,
       lastFileSize: null as number | null,
@@ -34,8 +34,8 @@ export default function App() {
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<TrialData | null>(initial.data);
-  const [outline, setOutline] = useState<TrialData["outline"] | null>(initial.outline);
+  const [data, setData] = useState<StoryAnalysis | null>(initial.data);
+  const [outline, setOutline] = useState<StoryAnalysis["outline"] | null>(initial.outline);
   const [activeTab, setActiveTab] = useState<TabId>(initial.activeTab);
 
   const hasResults = Boolean(data && outline);
@@ -97,10 +97,10 @@ export default function App() {
           </div>
           <div>
             <h1 className="font-display text-lg font-bold text-ink-950 leading-tight">
-              Fiction RAG Trial
+              Fiction RAG
             </h1>
             <p className="text-xs text-ink-500">
-              Story analysis for collaborative fiction writing
+              Interactive fiction analysis &amp; RAG-assisted writing
             </p>
           </div>
         </div>
@@ -131,7 +131,7 @@ export default function App() {
               Reading your manuscript…
             </p>
             <p className="mt-2 text-sm text-ink-500 animate-pulse-soft">
-              Extracting scenes, patterns, outlines, and ingestion recommendations.
+              Extracting scenes, patterns, outlines, and saving to your vector store.
               This may take a minute.
             </p>
           </div>
@@ -176,7 +176,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-ink-200/60 mt-16 py-6 text-center text-xs text-ink-400">
-        Fiction RAG Trial · Built for manuscript analysis &amp; vector ingestion planning
+        Fiction RAG · Manuscript analysis with Pinecone-backed retrieval
       </footer>
     </div>
   );

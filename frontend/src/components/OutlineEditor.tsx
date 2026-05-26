@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BookOpen, Layers, ListTree, Save } from "lucide-react";
-import type { OutlineDraft, RetrievedExample } from "../types/trial";
+import type { OutlineDraft, RetrievedExample } from "../types/story";
 
 type Props = {
   outline: OutlineDraft;

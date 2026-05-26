@@ -1,13 +1,14 @@
-import type { AnalysisMode, TrialData } from "../types/trial";
+import type { AnalysisMode, StoryAnalysis } from "../types/story";
 
 export async function analyzePdf(
   file: File,
   apiKey?: string,
   analysisMode: AnalysisMode = "linear_choice_1"
-): Promise<TrialData> {
+): Promise<StoryAnalysis> {
   const form = new FormData();
   form.append("file", file);
   form.append("analysis_mode", analysisMode);
+  form.append("persist_to_pinecone", "true");
   if (apiKey?.trim()) {
     form.append("openai_api_key", apiKey.trim());
   }
@@ -29,5 +30,5 @@ export async function analyzePdf(
     throw new Error(message);
   }
 
-  return body as TrialData;
+  return body as StoryAnalysis;
 }

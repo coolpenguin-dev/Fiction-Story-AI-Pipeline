@@ -5,12 +5,12 @@ import {
   Heart,
   Layers,
 } from "lucide-react";
-import type { TabId, TrialData } from "../types/trial";
+import type { TabId, StoryAnalysis } from "../types/story";
 import { SceneSummaryList } from "./SceneSummaryList";
 import { NarrativePatternsPanel } from "./NarrativePatternsPanel";
 import { OutlineEditor } from "./OutlineEditor";
 import { RelationshipTable } from "./RelationshipTable";
-import { IngestionPanel } from "./IngestionPanel";
+import { StoragePanel } from "./StoragePanel";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "scenes", label: "Scenes", icon: <BookMarked className="h-4 w-4" /> },
@@ -21,15 +21,15 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     label: "Relationships",
     icon: <Heart className="h-4 w-4" />,
   },
-  { id: "ingestion", label: "Ingestion", icon: <Database className="h-4 w-4" /> },
+  { id: "ingestion", label: "Storage", icon: <Database className="h-4 w-4" /> },
 ];
 
 type Props = {
-  data: TrialData;
+  data: StoryAnalysis;
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
-  outline: TrialData["outline"];
-  onOutlineChange: (outline: TrialData["outline"]) => void;
+  outline: StoryAnalysis["outline"];
+  onOutlineChange: (outline: StoryAnalysis["outline"]) => void;
 };
 
 export function ResultsPanel({
@@ -59,7 +59,7 @@ export function ResultsPanel({
           {(data.canonicalPathNote || data.analysisMode) && (
             <p className="mt-2 text-sm text-ink-600 max-w-2xl">
               {data.analysisMode === "linear_choice_1" && (
-                <span className="font-medium text-ink-700">POC path: Choice 1 · </span>
+                <span className="font-medium text-ink-700">Canonical path: Choice 1 · </span>
               )}
               {data.analysisMode === "full_branching" && (
                 <span className="font-medium text-ink-700">Full branching · </span>
@@ -115,7 +115,7 @@ export function ResultsPanel({
         {activeTab === "relationships" && (
           <RelationshipTable rows={data.relationships} />
         )}
-        {activeTab === "ingestion" && <IngestionPanel ingestion={data.ingestion} />}
+        {activeTab === "ingestion" && <StoragePanel data={data} />}
       </div>
     </section>
   );

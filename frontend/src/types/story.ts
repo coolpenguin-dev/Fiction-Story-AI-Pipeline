@@ -52,7 +52,8 @@ export type IngestionRecommendation = {
   optionalLater: string[];
 };
 
-export type TrialData = {
+export type StoryAnalysis = {
+  storyId?: string;
   storyTitle: string;
   analysisMode?: AnalysisMode;
   canonicalPathNote?: string;
@@ -62,6 +63,7 @@ export type TrialData = {
   retrievedExamples: RetrievedExample[];
   relationships: RelationshipRow[];
   ingestion: IngestionRecommendation;
+  pinecone?: { upserted?: number; namespace?: string; error?: string };
 };
 
 export type TabId =

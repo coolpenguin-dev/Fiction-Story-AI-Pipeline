@@ -1,6 +1,6 @@
 import { Heart } from "lucide-react";
 import { LevelBadge } from "./LevelBadge";
-import type { RelationshipRow } from "../types/trial";
+import type { RelationshipRow } from "../types/story";
 
 export function RelationshipTable({ rows }: { rows: RelationshipRow[] }) {
   if (!rows.length) {

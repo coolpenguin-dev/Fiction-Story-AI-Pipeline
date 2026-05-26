@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, GitBranch, MapPin, Users } from "lucide-react";
-import type { SceneSummary } from "../types/trial";
+import type { SceneSummary } from "../types/story";
 
 function SceneCard({ scene }: { scene: SceneSummary }) {
   const [open, setOpen] = useState(true);

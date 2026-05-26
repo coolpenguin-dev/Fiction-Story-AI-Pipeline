@@ -67,7 +67,7 @@ export function UploadPanel({
         </h2>
         <p className="mt-1 text-sm text-ink-600">
           Upload a fiction PDF. We extract scenes, narrative patterns, an
-          editable outline, relationship arcs, and RAG ingestion recommendations.
+          editable outline, relationship arcs, and store vectors in Pinecone.
         </p>
       </div>
 

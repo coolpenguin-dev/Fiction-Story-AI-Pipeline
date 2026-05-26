@@ -7,12 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.analyze import analyze_fiction
 from services.pdf import extract_text_from_pdf
+from services.pinecone_store import build_story_id, upsert_scenes
 
 load_dotenv()
 
 app = FastAPI(
-    title="Fiction RAG Trial API",
-    description="Analyzes fiction PDFs for scene summaries, patterns, and RAG ingestion recommendations.",
+    title="Fiction RAG API",
+    description="Analyzes interactive fiction PDFs and stores scene vectors for RAG-assisted writing.",
     version="1.0.0",
 )
 
@@ -41,6 +42,7 @@ async def analyze(
     file: UploadFile = File(...),
     openai_api_key: Optional[str] = Form(None),
     analysis_mode: Optional[str] = Form("linear_choice_1"),
+    persist_to_pinecone: Optional[bool] = Form(False),
 ):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
@@ -75,5 +77,16 @@ async def analyze(
         if "insufficient_quota" in err.lower():
             raise HTTPException(status_code=402, detail="OpenAI quota exceeded.") from e
         raise HTTPException(status_code=502, detail=f"Analysis failed: {err}") from e
+
+    # Optionally persist to Pinecone for scalable RAG
+    if persist_to_pinecone:
+        try:
+            story_id = build_story_id(result.get("storyTitle", "Untitled"))
+            pinecone_info = upsert_scenes(result, story_id=story_id)
+            result["storyId"] = story_id
+            result["pinecone"] = pinecone_info
+        except Exception as e:
+            # Don't fail analysis response if persistence fails
+            result["pinecone"] = {"error": str(e)}
 
     return result

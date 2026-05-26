@@ -1,11 +1,11 @@
-import type { TabId, TrialData } from "../types/trial";
+import type { TabId, StoryAnalysis } from "../types/story";
 
 export const SESSION_STORAGE_KEY = "fiction-rag-session";
 const LEGACY_OUTLINE_KEY = "fiction-rag-outline";
 
 export type PersistedSession = {
-  data: TrialData;
-  outline: TrialData["outline"];
+  data: StoryAnalysis;
+  outline: StoryAnalysis["outline"];
   activeTab: TabId;
   fileName?: string;
   fileSize?: number;

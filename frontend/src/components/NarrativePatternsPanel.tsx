@@ -1,5 +1,5 @@
 import { GitBranch } from "lucide-react";
-import type { NarrativePattern } from "../types/trial";
+import type { NarrativePattern } from "../types/story";
 
 export function NarrativePatternsPanel({
   patterns,
