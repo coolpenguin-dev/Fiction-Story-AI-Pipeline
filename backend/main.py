@@ -40,6 +40,7 @@ def health():
 async def analyze(
     file: UploadFile = File(...),
     openai_api_key: Optional[str] = Form(None),
+    analysis_mode: Optional[str] = Form("linear_choice_1"),
 ):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
@@ -66,7 +67,7 @@ async def analyze(
         raise HTTPException(status_code=422, detail=f"Failed to read PDF: {e}") from e
 
     try:
-        result = analyze_fiction(text, api_key)
+        result = analyze_fiction(text, api_key, analysis_mode=analysis_mode)
     except Exception as e:
         err = str(e)
         if "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():

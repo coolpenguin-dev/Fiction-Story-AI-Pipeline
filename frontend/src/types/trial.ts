@@ -1,6 +1,11 @@
+export type AnalysisMode = "linear_choice_1" | "full_branching";
+
 export type SceneSummary = {
   id: string;
   chapter?: number;
+  pathLabel?: string;
+  isChoicePoint?: boolean;
+  choiceSummary?: string | null;
   title: string;
   setting: string;
   pov: string;
@@ -23,6 +28,7 @@ export type OutlineDraft = {
   premise: string;
   chapterOutline: string;
   sceneBeats: string;
+  canonicalPathNote?: string;
 };
 
 export type RetrievedExample = {
@@ -48,6 +54,8 @@ export type IngestionRecommendation = {
 
 export type TrialData = {
   storyTitle: string;
+  analysisMode?: AnalysisMode;
+  canonicalPathNote?: string;
   scenes: SceneSummary[];
   patterns: NarrativePattern[];
   outline: OutlineDraft;

@@ -40,7 +40,14 @@ export function RelationshipTable({ rows }: { rows: RelationshipRow[] }) {
                 <td className="px-5 py-3 font-medium text-ink-900 whitespace-nowrap">
                   {row.chapterOrScene}
                 </td>
-                <td className="px-5 py-3 text-ink-800">{row.pair}</td>
+                <td className="px-5 py-3 text-ink-800">
+                  {row.pair}
+                  {/#\w+#/i.test(row.pair) && (
+                    <span className="ml-2 badge bg-red-100 text-red-800">
+                      Unresolved name token
+                    </span>
+                  )}
+                </td>
                 <td className="px-5 py-3">
                   <LevelBadge value={row.trust} />
                 </td>

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ChevronDown, MapPin, Users } from "lucide-react";
+import { ChevronDown, GitBranch, MapPin, Users } from "lucide-react";
 import type { SceneSummary } from "../types/trial";
 
 function SceneCard({ scene }: { scene: SceneSummary }) {
   const [open, setOpen] = useState(true);
+  const hasChoice = Boolean(scene.isChoicePoint && scene.choiceSummary);
 
   return (
     <article
@@ -21,6 +22,15 @@ function SceneCard({ scene }: { scene: SceneSummary }) {
             {scene.chapter != null && (
               <span className="badge bg-accent-light text-accent">Ch. {scene.chapter}</span>
             )}
+            {scene.pathLabel && (
+              <span className="badge bg-ink-100 text-ink-600">{scene.pathLabel}</span>
+            )}
+            {scene.isChoicePoint && (
+              <span className="badge bg-amber-100 text-amber-800 inline-flex items-center gap-1">
+                <GitBranch className="h-3 w-3" />
+                Choice point
+              </span>
+            )}
           </div>
           <h3 className="mt-1 font-display text-lg font-semibold text-ink-950 truncate">
             {scene.title}
@@ -32,9 +42,23 @@ function SceneCard({ scene }: { scene: SceneSummary }) {
       </button>
 
       {open && (
-        <div className="px-5 pb-5 pt-0 grid gap-4 sm:grid-cols-2 border-t border-ink-100">
-          <Field label="Setting" icon={<MapPin className="h-3.5 w-3.5" />} value={scene.setting} className="pt-5" />
-          <Field label="POV" value={scene.pov} className="pt-5" />
+        <div
+          className={`px-5 pb-5 grid gap-4 sm:grid-cols-2 border-t border-ink-100 ${
+            hasChoice ? "pt-4" : "pt-2"
+          }`}
+        >
+          {hasChoice && (
+            <div className="sm:col-span-2 mt-1 rounded-lg bg-amber-50/80 border border-amber-200/80 px-4 py-3">
+              <p className="field-label mb-1">Choice (canonical path)</p>
+              <p className="text-sm text-ink-800 leading-relaxed">{scene.choiceSummary}</p>
+            </div>
+          )}
+          <Field
+            label="Setting"
+            icon={<MapPin className="h-3.5 w-3.5" />}
+            value={scene.setting}
+          />
+          <Field label="POV" value={scene.pov} />
           <Field
             label="Characters"
             icon={<Users className="h-3.5 w-3.5" />}

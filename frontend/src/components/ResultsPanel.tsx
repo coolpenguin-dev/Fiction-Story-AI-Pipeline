@@ -56,6 +56,17 @@ export function ResultsPanel({
           <h2 className="font-display text-2xl font-bold text-ink-950">
             {data.storyTitle}
           </h2>
+          {(data.canonicalPathNote || data.analysisMode) && (
+            <p className="mt-2 text-sm text-ink-600 max-w-2xl">
+              {data.analysisMode === "linear_choice_1" && (
+                <span className="font-medium text-ink-700">POC path: Choice 1 · </span>
+              )}
+              {data.analysisMode === "full_branching" && (
+                <span className="font-medium text-ink-700">Full branching · </span>
+              )}
+              {data.canonicalPathNote}
+            </p>
+          )}
         </div>
       </div>
 
