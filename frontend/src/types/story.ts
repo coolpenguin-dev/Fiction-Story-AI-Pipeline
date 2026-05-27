@@ -103,6 +103,28 @@ export type GenerationRetrievalUsed = {
   sourceFileName?: string | null;
 };
 
+export type StoryStatePattern = {
+  name: string;
+  description: string;
+};
+
+export type StoryStateRelationship = {
+  pair: string;
+  chapterOrScene: string;
+  trust: string;
+  tension: string;
+  intimacy: string;
+  notes: string;
+};
+
+export type StoryState = {
+  patterns: StoryStatePattern[];
+  relationships: StoryStateRelationship[];
+  openThreads: string[];
+  characters: string[];
+  sceneCount: number;
+};
+
 export type GenerateResponse = {
   ok: boolean;
   mode: GenerationMode;
@@ -152,6 +174,7 @@ export type StoryAnalysis = {
   relationships: RelationshipRow[];
   ingestion: IngestionRecommendation;
   pinecone?: PineconeInfo;
+  storyState?: StoryState;
 };
 
 export type TabId =
@@ -168,6 +191,7 @@ export type CorpusEntry = {
   outline: OutlineDraft;
   generation?: GenerationDraft;
   workflow?: WorkflowState;
+  storyState?: StoryState;
 };
 
 export type BatchStoryResult = {

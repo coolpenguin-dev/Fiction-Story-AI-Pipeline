@@ -46,7 +46,7 @@ Open [http://localhost:5173](http://localhost:5173). The dev server proxies `/ap
 
 **Retrieval:** `POST /api/retrieve` — semantic search over stored scenes using your editable outline (Outline tab → **Corpus matches**).
 
-**Generation:** `POST /api/generate` — RAG-assisted workflow steps: premise → chapter outline → scene beats → opening draft (`premise`, `chapter_outline`, `scene_beats`, `opening_draft`). Outline tab uses a gated **Writing workflow** (generate → edit → approve → next step).
+**Generation:** `POST /api/generate` — RAG-assisted workflow steps with **persistent story state** (patterns, relationships, open threads from analysis) passed into every generation call.
 
 **API:** `POST /api/analyze` (single file) · `POST /api/analyze-batch` (multiple `files` form fields, max 5) · `POST /api/generate` · `POST /api/retrieve`.
 

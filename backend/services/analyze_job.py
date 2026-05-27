@@ -8,6 +8,7 @@ from services.analyze import analyze_fiction
 from services.openai_retry import format_analysis_error
 from services.pdf import extract_text_from_pdf
 from services.pinecone_store import build_story_id, pinecone_namespace, upsert_scenes
+from services.story_state import build_story_state
 
 MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -53,6 +54,7 @@ def analyze_pdf_bytes(
         raise HTTPException(status_code=502, detail=format_analysis_error(e)) from e
 
     result["sourceFileName"] = filename
+    result["storyState"] = build_story_state(result)
 
     if persist_to_pinecone:
         story_id = build_story_id(filename, result.get("storyTitle", "Untitled"))

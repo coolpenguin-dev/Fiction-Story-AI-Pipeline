@@ -3,6 +3,7 @@ import type {
   GenerationMode,
   OutlineDraft,
   RetrievedScene,
+  StoryState,
 } from "../types/story";
 
 function apiUrl(path: string): string {
@@ -25,6 +26,7 @@ export async function generateFromOutline(
     outline: OutlineDraft;
     storyTitle: string;
     storyId?: string | null;
+    storyState?: StoryState | null;
     retrievedScenes?: RetrievedScene[];
     topK?: number;
   }
@@ -39,6 +41,7 @@ export async function generateFromOutline(
       premise: options.outline.premise,
       chapterOutline: options.outline.chapterOutline,
       sceneBeats: options.outline.sceneBeats,
+      storyState: options.storyState ?? null,
       retrievedScenes: options.retrievedScenes ?? [],
       topK: options.topK ?? 5,
       excludeStoryId: options.storyId ?? null,

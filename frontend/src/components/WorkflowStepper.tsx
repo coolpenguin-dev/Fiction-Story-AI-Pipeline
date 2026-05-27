@@ -15,12 +15,14 @@ import {
 } from "lucide-react";
 import { generateFromOutline } from "../api/generate";
 import { retrieveSimilarScenes } from "../api/retrieve";
+import { StoryStatePanel } from "./StoryStatePanel";
 import type {
   GenerationDraft,
   GenerationMode,
   GenerationRetrievalUsed,
   OutlineDraft,
   RetrievedScene,
+  StoryState,
   WorkflowApproval,
   WorkflowState,
   WorkflowStepId,
@@ -32,6 +34,7 @@ type Props = {
   workflow: WorkflowState;
   storyId?: string | null;
   storyTitle?: string;
+  storyState: StoryState;
   active: boolean;
   onOutlineChange: (outline: OutlineDraft) => void;
   onGenerationChange: (generation: GenerationDraft) => void;
@@ -233,6 +236,7 @@ export function WorkflowStepper({
   workflow,
   storyId,
   storyTitle = "Untitled",
+  storyState,
   active,
   onOutlineChange,
   onGenerationChange,
@@ -349,6 +353,7 @@ export function WorkflowStepper({
         outline,
         storyTitle,
         storyId,
+        storyState,
         retrievedScenes: results,
       });
       if (!resp.ok) {
@@ -573,6 +578,8 @@ export function WorkflowStepper({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <StoryStatePanel storyState={storyState} />
+
             {searchError && (
               <p className="text-xs text-amber-900 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
                 {searchError}

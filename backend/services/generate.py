@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from services.openai_retry import call_with_retry
 from services.retrieve import retrieve_from_outline
+from services.story_state import format_story_state_block
 
 GenerationMode = Literal[
     "premise",
@@ -22,6 +23,7 @@ You help authors draft new material using:
 
 Rules:
 - Honor the author's outline characters, setting, and emotional arc.
+- When PERSISTENT STORY STATE is provided, keep character arcs, relationship milestones, and open threads consistent.
 - Use corpus references only as craft inspiration (beat rhythm, relationship escalation, POV handling).
 - Do NOT import characters, names, or plot events from reference stories.
 - Write in the same narrative mode implied by the outline (e.g. third-person literary vs second-person interactive).
@@ -32,6 +34,9 @@ USER_TEMPLATE_PREMISE = """Write or refine a one-paragraph story premise for the
 One paragraph only. Capture core conflict, emotional promise, and protagonist situation.
 
 STORY TITLE: {story_title}
+
+PERSISTENT STORY STATE (from analyzed manuscript — maintain coherence):
+{story_state}
 
 CURRENT PREMISE (author draft — improve or replace):
 {premise}
@@ -46,6 +51,9 @@ USER_TEMPLATE_CHAPTER_OUTLINE = """Expand the premise into a chapter-level outli
 Use numbered chapters (Chapter 1, Chapter 2, …). One or two sentences per chapter describing the arc beat.
 
 STORY TITLE: {story_title}
+
+PERSISTENT STORY STATE (from analyzed manuscript — maintain coherence):
+{story_state}
 
 PREMISE:
 {premise}
@@ -63,6 +71,9 @@ USER_TEMPLATE_SCENE_BEATS = """Write granular opening-scene beats for the story 
 Use numbered scenes or bullet beats for the opening act (typically 3–8 beats). Actionable for drafting.
 
 STORY TITLE: {story_title}
+
+PERSISTENT STORY STATE (from analyzed manuscript — maintain coherence):
+{story_state}
 
 PREMISE:
 {premise}
@@ -84,6 +95,9 @@ Return numbered chapters with 3–6 bullet beats each. Keep beats actionable for
 
 STORY TITLE: {story_title}
 
+PERSISTENT STORY STATE (from analyzed manuscript — maintain coherence):
+{story_state}
+
 AUTHOR OUTLINE
 Premise:
 {premise}
@@ -104,6 +118,9 @@ USER_TEMPLATE_OPENING_DRAFT = """Write an opening-scene prose draft (~600–900 
 Ground the draft in the opening scene beats. End on a beat that invites the next scene.
 
 STORY TITLE: {story_title}
+
+PERSISTENT STORY STATE (from analyzed manuscript — maintain coherence):
+{story_state}
 
 AUTHOR OUTLINE
 Premise:
@@ -199,6 +216,7 @@ def generate_from_outline(
     chapter_outline: str = "",
     scene_beats: str = "",
     retrieved_scenes: list[dict[str, Any]] | None = None,
+    story_state: dict[str, Any] | None = None,
     exclude_story_id: str | None = None,
     top_k: int = 5,
 ) -> dict[str, Any]:
@@ -224,9 +242,11 @@ def generate_from_outline(
     )
 
     references = _format_references(scenes)
+    state_block = format_story_state_block(story_state)
     template = _TEMPLATES.get(mode, USER_TEMPLATE_CHAPTER_BEATS)
     user_content = template.format(
         story_title=story_title.strip() or "Untitled",
+        story_state=state_block,
         premise=premise.strip() or "(not provided yet)",
         chapter_outline=chapter_outline.strip() or "(not provided yet)",
         scene_beats=scene_beats.strip() or "(not provided yet)",

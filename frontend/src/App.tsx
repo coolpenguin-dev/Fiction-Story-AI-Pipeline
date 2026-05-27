@@ -8,6 +8,7 @@ import { CorpusStoryPicker } from "./components/CorpusStoryPicker";
 import { CorpusLibraryPanel } from "./components/CorpusLibraryPanel";
 import { IngestionStatusBanner } from "./components/IngestionStatusBanner";
 import { clearSession, loadSession, saveSession } from "./lib/session";
+import { buildStoryState } from "./lib/storyState";
 import type {
   BatchStoryResult,
   AnalyzeProgress,
@@ -111,6 +112,7 @@ export default function App() {
             outline: result.outline,
             generation: { ...EMPTY_GENERATION },
             workflow: { ...EMPTY_WORKFLOW },
+            storyState: result.storyState ?? buildStoryState(result),
           });
           setProgress({
             completed: i + 1,
@@ -271,6 +273,11 @@ export default function App() {
               onGenerationChange={handleGenerationChange}
               workflow={selected.workflow ?? EMPTY_WORKFLOW}
               onWorkflowChange={handleWorkflowChange}
+              storyState={
+                selected.storyState ??
+                selected.data.storyState ??
+                buildStoryState(selected.data)
+              }
             />
           </div>
         )}

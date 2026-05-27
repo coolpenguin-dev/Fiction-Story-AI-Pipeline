@@ -2,6 +2,7 @@ import { WorkflowStepper } from "./WorkflowStepper";
 import type {
   GenerationDraft,
   OutlineDraft,
+  StoryState,
   WorkflowState,
 } from "../types/story";
 
@@ -9,6 +10,7 @@ type Props = {
   outline: OutlineDraft;
   generation: GenerationDraft;
   workflow: WorkflowState;
+  storyState: StoryState;
   storyId?: string | null;
   storyTitle?: string;
   active: boolean;
@@ -22,6 +24,7 @@ export function OutlineEditor({
   outline,
   generation,
   workflow,
+  storyState,
   storyId,
   storyTitle,
   active,
@@ -34,6 +37,7 @@ export function OutlineEditor({
       outline={outline}
       generation={generation}
       workflow={workflow}
+      storyState={storyState}
       storyId={storyId}
       storyTitle={storyTitle}
       active={active}

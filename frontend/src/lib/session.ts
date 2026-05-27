@@ -1,5 +1,6 @@
 import type { CorpusEntry, GenerationDraft, TabId } from "../types/story";
 import { EMPTY_GENERATION, EMPTY_WORKFLOW } from "../types/story";
+import { buildStoryState } from "./storyState";
 
 export const SESSION_STORAGE_KEY = "fiction-rag-session";
 const LEGACY_OUTLINE_KEY = "fiction-rag-outline";
@@ -23,12 +24,16 @@ export type PersistedSession = {
 
 function normalizeEntry(entry: CorpusEntry): CorpusEntry {
   const legacyGen = entry.generation as (GenerationDraft & { chapterBeats?: string }) | undefined;
+  const storyState =
+    entry.storyState ?? entry.data.storyState ?? buildStoryState(entry.data);
   return {
     ...entry,
+    data: { ...entry.data, storyState },
     generation: {
       openingDraft: legacyGen?.openingDraft ?? "",
     },
     workflow: entry.workflow ?? { ...EMPTY_WORKFLOW },
+    storyState,
   };
 }
 
@@ -58,6 +63,7 @@ export function loadSession(): PersistedSession | null {
           outline: legacy.outline ?? legacy.data.outline,
           generation: { ...EMPTY_GENERATION },
           workflow: { ...EMPTY_WORKFLOW },
+          storyState: buildStoryState(legacy.data),
         }),
       ],
       selectedIndex: 0,

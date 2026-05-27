@@ -112,6 +112,28 @@ class RetrievedSceneInput(BaseModel):
     label: str | None = None
 
 
+class StoryStatePatternInput(BaseModel):
+    name: str = ""
+    description: str = ""
+
+
+class StoryStateRelationshipInput(BaseModel):
+    pair: str = ""
+    chapterOrScene: str = ""
+    trust: str = ""
+    tension: str = ""
+    intimacy: str = ""
+    notes: str = ""
+
+
+class StoryStateInput(BaseModel):
+    patterns: list[StoryStatePatternInput] = Field(default_factory=list)
+    relationships: list[StoryStateRelationshipInput] = Field(default_factory=list)
+    openThreads: list[str] = Field(default_factory=list)
+    characters: list[str] = Field(default_factory=list)
+    sceneCount: int = 0
+
+
 class GenerateRequest(BaseModel):
     mode: Literal[
         "premise",
@@ -126,6 +148,7 @@ class GenerateRequest(BaseModel):
     chapterOutline: str = ""
     sceneBeats: str = ""
     retrievedScenes: list[RetrievedSceneInput] = Field(default_factory=list)
+    storyState: StoryStateInput | None = None
     topK: int = Field(default=5, ge=1, le=20)
     excludeStoryId: str | None = None
 
@@ -135,6 +158,7 @@ async def generate(body: GenerateRequest):
     api_key = _resolve_api_key()
     loop = asyncio.get_running_loop()
     scenes_payload = [s.model_dump() for s in body.retrievedScenes] or None
+    state_payload = body.storyState.model_dump() if body.storyState else None
     return await loop.run_in_executor(
         _executor,
         lambda: generate_from_outline(
@@ -145,6 +169,7 @@ async def generate(body: GenerateRequest):
             chapter_outline=body.chapterOutline,
             scene_beats=body.sceneBeats,
             retrieved_scenes=scenes_payload,
+            story_state=state_payload,
             exclude_story_id=body.excludeStoryId or body.storyId,
             top_k=body.topK,
         ),
