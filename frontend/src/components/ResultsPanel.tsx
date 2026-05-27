@@ -5,7 +5,7 @@ import {
   Heart,
   Layers,
 } from "lucide-react";
-import type { TabId, StoryAnalysis } from "../types/story";
+import type { TabId, StoryAnalysis, GenerationDraft } from "../types/story";
 import { SceneSummaryList } from "./SceneSummaryList";
 import { NarrativePatternsPanel } from "./NarrativePatternsPanel";
 import { OutlineEditor } from "./OutlineEditor";
@@ -30,6 +30,8 @@ type Props = {
   onTabChange: (tab: TabId) => void;
   outline: StoryAnalysis["outline"];
   onOutlineChange: (outline: StoryAnalysis["outline"]) => void;
+  generation: GenerationDraft;
+  onGenerationChange: (generation: GenerationDraft) => void;
 };
 
 export function ResultsPanel({
@@ -38,6 +40,8 @@ export function ResultsPanel({
   onTabChange,
   outline,
   onOutlineChange,
+  generation,
+  onGenerationChange,
 }: Props) {
   const goToScenes = (sceneId: string) => {
     onTabChange("scenes");
@@ -108,8 +112,12 @@ export function ResultsPanel({
         {activeTab === "outline" && (
           <OutlineEditor
             outline={outline}
-            retrievedExamples={data.retrievedExamples}
+            storyId={data.storyId}
+            storyTitle={data.storyTitle}
+            active={activeTab === "outline"}
             onChange={onOutlineChange}
+            generation={generation}
+            onGenerationChange={onGenerationChange}
           />
         )}
         {activeTab === "relationships" && (

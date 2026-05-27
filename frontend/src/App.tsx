@@ -9,8 +9,10 @@ import type {
   BatchStoryResult,
   AnalyzeProgress,
   CorpusEntry,
+  GenerationDraft,
   TabId,
 } from "./types/story";
+import { EMPTY_GENERATION } from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
@@ -79,6 +81,7 @@ export default function App() {
             fileSize: file.size,
             data: result,
             outline: result.outline,
+            generation: { ...EMPTY_GENERATION },
           });
           setProgress({
             completed: i + 1,
@@ -145,6 +148,17 @@ export default function App() {
     [selectedIndex]
   );
 
+  const handleGenerationChange = useCallback(
+    (generation: GenerationDraft) => {
+      setCorpus((prev) =>
+        prev.map((entry, i) =>
+          i === selectedIndex ? { ...entry, generation } : entry
+        )
+      );
+    },
+    [selectedIndex]
+  );
+
   const handleSelectStory = useCallback((index: number) => {
     setSelectedIndex(index);
     setActiveTab("scenes");
@@ -195,6 +209,8 @@ export default function App() {
               onTabChange={setActiveTab}
               outline={outlinesByIndex[selectedIndex] ?? selected.outline}
               onOutlineChange={handleOutlineChange}
+              generation={selected.generation ?? EMPTY_GENERATION}
+              onGenerationChange={handleGenerationChange}
             />
           </div>
         )}

@@ -36,6 +36,54 @@ export type RetrievedExample = {
   snippet: string;
 };
 
+export type RetrievedScene = {
+  storyId: string;
+  storyTitle: string;
+  sourceFileName?: string | null;
+  sceneId: string;
+  chapter?: number | null;
+  score: number;
+  label: string;
+  snippet: string;
+};
+
+export type RetrieveResponse = {
+  configured: boolean;
+  namespace?: string;
+  results: RetrievedScene[];
+  queryPreview?: string;
+  excludeStoryId?: string | null;
+  error?: string;
+};
+
+export type GenerationMode = "chapter_beats" | "opening_draft";
+
+export type GenerationDraft = {
+  chapterBeats: string;
+  openingDraft: string;
+};
+
+export const EMPTY_GENERATION: GenerationDraft = {
+  chapterBeats: "",
+  openingDraft: "",
+};
+
+export type GenerationRetrievalUsed = {
+  storyId?: string;
+  storyTitle?: string;
+  sceneId?: string;
+  score?: number;
+  sourceFileName?: string | null;
+};
+
+export type GenerateResponse = {
+  ok: boolean;
+  mode: GenerationMode;
+  content: string;
+  error?: string;
+  retrievalUsed: GenerationRetrievalUsed[];
+};
+
 export type RelationshipRow = {
   chapterOrScene: string;
   pair: string;
@@ -91,6 +139,7 @@ export type CorpusEntry = {
   fileSize?: number;
   data: StoryAnalysis;
   outline: OutlineDraft;
+  generation?: GenerationDraft;
 };
 
 export type BatchStoryResult = {

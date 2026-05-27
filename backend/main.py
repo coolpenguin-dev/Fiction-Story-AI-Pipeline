@@ -2,14 +2,17 @@ import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from services.analyze_job import analyze_pdf_bytes
+from services.generate import generate_from_outline
 from services.pinecone_store import check_pinecone_health, list_corpus_stories
+from services.retrieve import retrieve_from_outline
 
 load_dotenv()
 
@@ -74,6 +77,72 @@ def _resolve_api_key() -> str:
 @app.get("/api/corpus")
 def corpus():
     return list_corpus_stories()
+
+
+class RetrieveRequest(BaseModel):
+    premise: str = ""
+    chapterOutline: str = ""
+    sceneBeats: str = ""
+    topK: int = Field(default=5, ge=1, le=20)
+    excludeStoryId: str | None = None
+
+
+@app.post("/api/retrieve")
+async def retrieve(body: RetrieveRequest):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _executor,
+        lambda: retrieve_from_outline(
+            premise=body.premise,
+            chapter_outline=body.chapterOutline,
+            scene_beats=body.sceneBeats,
+            top_k=body.topK,
+            exclude_story_id=body.excludeStoryId,
+        ),
+    )
+
+
+class RetrievedSceneInput(BaseModel):
+    storyId: str = ""
+    storyTitle: str = ""
+    sceneId: str = ""
+    score: float | None = None
+    snippet: str = ""
+    sourceFileName: str | None = None
+    label: str | None = None
+
+
+class GenerateRequest(BaseModel):
+    mode: Literal["chapter_beats", "opening_draft"] = "chapter_beats"
+    storyTitle: str = ""
+    storyId: str | None = None
+    premise: str = ""
+    chapterOutline: str = ""
+    sceneBeats: str = ""
+    retrievedScenes: list[RetrievedSceneInput] = Field(default_factory=list)
+    topK: int = Field(default=5, ge=1, le=20)
+    excludeStoryId: str | None = None
+
+
+@app.post("/api/generate")
+async def generate(body: GenerateRequest):
+    api_key = _resolve_api_key()
+    loop = asyncio.get_running_loop()
+    scenes_payload = [s.model_dump() for s in body.retrievedScenes] or None
+    return await loop.run_in_executor(
+        _executor,
+        lambda: generate_from_outline(
+            mode=body.mode,  # type: ignore[arg-type]
+            api_key=api_key,
+            story_title=body.storyTitle,
+            premise=body.premise,
+            chapter_outline=body.chapterOutline,
+            scene_beats=body.sceneBeats,
+            retrieved_scenes=scenes_payload,
+            exclude_story_id=body.excludeStoryId or body.storyId,
+            top_k=body.topK,
+        ),
+    )
 
 
 @app.post("/api/analyze")

@@ -487,6 +487,8 @@ def upsert_scenes(
             "setting": scene.get("setting"),
             "pov": scene.get("pov"),
             "tone": scene.get("tone"),
+            "plot_beat": (scene.get("plotBeat") or "")[:500],
+            "relationship_beats": (scene.get("relationshipBeats") or "")[:300],
             "analysis_mode": analysis_mode,
         }
         if source_filename:
@@ -691,3 +693,128 @@ def list_corpus_stories(*, dedupe: bool = True) -> dict[str, Any]:
             "Increase PINECONE_LIST_MAX_PAGES if needed."
         )
     return out
+
+
+def _build_retrieval_query(
+    premise: str = "",
+    chapter_outline: str = "",
+    scene_beats: str = "",
+) -> str:
+    parts = [
+        premise.strip(),
+        chapter_outline.strip(),
+        scene_beats.strip(),
+    ]
+    return "\n\n".join(p for p in parts if p)
+
+
+def _format_retrieved_match(meta: dict[str, Any], score: float) -> dict[str, Any]:
+    characters = meta.get("characters")
+    if isinstance(characters, list):
+        characters_text = ", ".join(str(c) for c in characters if c)
+    else:
+        characters_text = str(characters or "")
+
+    snippet_parts = [
+        f"Setting: {meta.get('setting', '')}".strip(),
+        f"POV: {meta.get('pov', '')}".strip(),
+        f"Characters: {characters_text}".strip(),
+        f"Plot: {meta.get('plot_beat', '')}".strip(),
+        f"Relationships: {meta.get('relationship_beats', '')}".strip(),
+        f"Tone: {meta.get('tone', '')}".strip(),
+    ]
+    snippet = "\n".join(p for p in snippet_parts if p and not p.endswith(":"))
+
+    story_title = str(meta.get("story_title") or "Untitled")
+    scene_id = str(meta.get("scene_id") or "")
+    chapter = meta.get("chapter")
+
+    label = story_title
+    if scene_id:
+        label = f"{story_title} · {scene_id}"
+    if chapter is not None:
+        label = f"{label} (Ch {chapter})"
+
+    return {
+        "storyId": str(meta.get("story_id") or ""),
+        "storyTitle": story_title,
+        "sourceFileName": meta.get("source_filename") or None,
+        "sceneId": scene_id,
+        "chapter": chapter,
+        "score": round(float(score), 4),
+        "label": label,
+        "snippet": snippet or "No scene details in vector metadata.",
+    }
+
+
+def retrieve_similar_scenes(
+    query_text: str,
+    *,
+    top_k: int = 5,
+    exclude_story_id: str | None = None,
+) -> dict[str, Any]:
+    """Semantic search over stored scene vectors in Pinecone."""
+    namespace = pinecone_namespace()
+    cleaned = (query_text or "").strip()
+
+    if not pinecone_env_configured():
+        return {
+            "configured": False,
+            "namespace": namespace,
+            "results": [],
+            "error": "Pinecone not configured: set PINECONE_API_KEY and PINECONE_INDEX_NAME.",
+        }
+
+    if not cleaned:
+        return {
+            "configured": True,
+            "namespace": namespace,
+            "results": [],
+            "error": "Add premise or outline text to search the corpus.",
+        }
+
+    top_k = max(1, min(20, int(top_k)))
+    over_fetch = top_k + 15 if exclude_story_id else top_k
+
+    try:
+        embedding = _embed_texts([cleaned])[0]
+        index = _get_pinecone_index()
+        resp = index.query(
+            vector=embedding,
+            top_k=over_fetch,
+            include_metadata=True,
+            namespace=namespace,
+        )
+    except Exception as e:
+        return {
+            "configured": True,
+            "namespace": namespace,
+            "results": [],
+            "queryPreview": cleaned[:200],
+            "error": str(e),
+        }
+
+    matches = getattr(resp, "matches", None) or []
+    results: list[dict[str, Any]] = []
+    for match in matches:
+        meta = _vector_metadata(match)
+        if not meta:
+            continue
+        story_id = str(meta.get("story_id") or "")
+        if exclude_story_id and story_id == exclude_story_id:
+            continue
+        score = getattr(match, "score", None)
+        if score is None and isinstance(match, dict):
+            score = match.get("score", 0)
+        results.append(_format_retrieved_match(meta, float(score or 0)))
+        if len(results) >= top_k:
+            break
+
+    preview = cleaned if len(cleaned) <= 240 else cleaned[:240] + "…"
+    return {
+        "configured": True,
+        "namespace": namespace,
+        "results": results,
+        "queryPreview": preview,
+        "excludeStoryId": exclude_story_id,
+    }

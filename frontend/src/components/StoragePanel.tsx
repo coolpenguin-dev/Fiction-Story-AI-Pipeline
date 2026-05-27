@@ -21,6 +21,8 @@ const STORED_METADATA = [
   "setting",
   "pov",
   "tone",
+  "plot_beat",
+  "relationship_beats",
   "analysis_mode",
 ];
 
