@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { MAX_CORPUS_FILES } from "../types/story";
-import type { HealthResponse } from "../types/story";
+import type { AnalyzeProgress, HealthResponse } from "../types/story";
 import { IngestionStatusBanner } from "./IngestionStatusBanner";
 
 type Props = {
@@ -21,18 +21,23 @@ type Props = {
   onGenerate: () => void;
   onClear: () => void;
   isLoading: boolean;
-  loadingLabel?: string | null;
+  progress: AnalyzeProgress | null;
   error: string | null;
   canClear: boolean;
   health: HealthResponse | null;
   healthLoading: boolean;
   healthError: string | null;
+  corpusVectorCount?: number | null;
 };
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Same footprint as the primary Analyze button (idle + loading). */
+const PRIMARY_ACTION_CLASS =
+  "flex-1 h-[3.25rem] rounded-xl px-6 shadow-md text-sm font-semibold";
 
 export function UploadPanel({
   files,
@@ -42,12 +47,13 @@ export function UploadPanel({
   onGenerate,
   onClear,
   isLoading,
-  loadingLabel,
+  progress,
   error,
   canClear,
   health,
   healthLoading,
   healthError,
+  corpusVectorCount,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -106,6 +112,7 @@ export function UploadPanel({
           health={health}
           loading={healthLoading}
           error={healthError}
+          corpusVectorCount={corpusVectorCount}
         />
 
         <div
@@ -244,36 +251,57 @@ export function UploadPanel({
           </div>
         )}
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={files.length === 0 || isLoading}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5
-              text-sm font-semibold text-white shadow-md
-              hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed
-              transition-all active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2"
-          >
-            {isLoading ? (
-              <>
-                <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                {loadingLabel ?? "Analyzing…"}
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                {files.length <= 1
-                  ? "Analyze manuscript"
-                  : `Analyze ${files.length} manuscripts`}
-              </>
-            )}
-          </button>
+        <div className="flex gap-3 items-stretch">
+          {isLoading && progress ? (
+            <div
+              className={`${PRIMARY_ACTION_CLASS} relative overflow-hidden bg-accent text-white`}
+              aria-live="polite"
+              aria-valuenow={progress.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Analyzing ${Math.min(progress.completed + 1, progress.total)} of ${progress.total}: ${progress.currentFileName}`}
+              title={progress.currentFileName}
+              role="progressbar"
+            >
+              <div
+                className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-500 ease-out"
+                style={{ width: `${progress.percent}%` }}
+              />
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                <div
+                  className="h-full bg-white transition-all duration-500 ease-out"
+                  style={{ width: `${progress.percent}%` }}
+                />
+              </div>
+              <div className="relative z-10 flex h-full items-center justify-between gap-3">
+                <span className="truncate">
+                  Analyzing {Math.min(progress.completed + 1, progress.total)} of{" "}
+                  {progress.total}
+                </span>
+                <span className="tabular-nums shrink-0">{progress.percent}%</span>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onGenerate}
+              disabled={files.length === 0 || isLoading}
+              className={`${PRIMARY_ACTION_CLASS} inline-flex items-center justify-center gap-2 bg-accent text-white
+                hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed
+                transition-all active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2`}
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              {files.length <= 1
+                ? "Analyze manuscript"
+                : `Analyze ${files.length} manuscripts`}
+            </button>
+          )}
 
           <button
             type="button"
             onClick={onClear}
             disabled={!canClear || isLoading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-200 bg-white px-5 py-3.5
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-200 bg-white px-5 h-[3.25rem]
               text-sm font-semibold text-ink-700 shadow-sm
               hover:bg-ink-50 hover:border-ink-300 disabled:opacity-50 disabled:cursor-not-allowed
               transition-all focus:outline-none focus:ring-2 focus:ring-ink-200 focus:ring-offset-2"

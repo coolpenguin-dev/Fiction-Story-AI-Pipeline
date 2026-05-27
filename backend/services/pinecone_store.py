@@ -70,6 +70,208 @@ def _pinecone_result(
     return out
 
 
+_LEGACY_STORY_ID_SUFFIX = re.compile(r"-[a-f0-9]{10}$")
+
+
+def _coerce_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        result = to_dict()
+        return result if isinstance(result, dict) else {}
+    return {}
+
+
+def _read_namespace_vector_count(ns_stats: Any) -> int:
+    if ns_stats is None:
+        return 0
+    if isinstance(ns_stats, dict):
+        raw = ns_stats.get("vector_count", ns_stats.get("vectorCount"))
+    else:
+        raw = getattr(ns_stats, "vector_count", None) or getattr(ns_stats, "vectorCount", None)
+    try:
+        return int(raw or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _namespace_stats_map(stats: Any) -> dict[str, Any]:
+    raw = _coerce_mapping(stats)
+    namespaces = raw.get("namespaces")
+    if namespaces is None:
+        namespaces = getattr(stats, "namespaces", None)
+    if namespaces is None:
+        return {}
+    return _coerce_mapping(namespaces)
+
+
+def _list_page_size() -> int:
+    return max(1, min(100, int(os.getenv("PINECONE_LIST_PAGE_SIZE", "100"))))
+
+
+def _list_max_pages() -> int:
+    return max(1, int(os.getenv("PINECONE_LIST_MAX_PAGES", "100")))
+
+
+def _paginate_vector_ids(index: Any, namespace: str) -> tuple[list[str], bool]:
+    """Return all vector IDs in a namespace (paginated)."""
+    page_size = _list_page_size()
+    max_pages = _list_max_pages()
+    ids: list[str] = []
+    pagination_token: str | None = None
+    truncated = False
+
+    for _ in range(max_pages):
+        kwargs: dict[str, Any] = {"namespace": namespace, "limit": page_size}
+        if pagination_token:
+            kwargs["pagination_token"] = pagination_token
+
+        page = index.list_paginated(**kwargs)
+        items = getattr(page, "vectors", None) or []
+        for item in items:
+            vector_id = item if isinstance(item, str) else getattr(item, "id", None)
+            if vector_id:
+                ids.append(str(vector_id))
+
+        pagination = getattr(page, "pagination", None)
+        next_token = None
+        if pagination is not None:
+            next_token = (
+                pagination.get("next")
+                if isinstance(pagination, dict)
+                else getattr(pagination, "next", None)
+            )
+        if not next_token:
+            break
+        pagination_token = str(next_token)
+    else:
+        truncated = True
+
+    return ids, truncated
+
+
+def count_namespace_vectors(index: Any, namespace: str) -> int:
+    """
+    Accurate vector count for a namespace.
+    Falls back to listing IDs when describe_index_stats omits namespace counts
+    (common on Pinecone serverless).
+    """
+    stats = index.describe_index_stats()
+    ns_map = _namespace_stats_map(stats)
+    count = _read_namespace_vector_count(ns_map.get(namespace))
+    if count <= 0 and namespace:
+        count = _read_namespace_vector_count(ns_map.get(""))
+    if count > 0:
+        return count
+    ids, _ = _paginate_vector_ids(index, namespace)
+    return len(ids)
+
+
+def _delete_by_metadata_filter(index: Any, namespace: str, flt: dict[str, Any]) -> None:
+    try:
+        index.delete(filter=flt, namespace=namespace)
+    except Exception:
+        pass
+
+
+def _is_legacy_story_id(story_id: str) -> bool:
+    return bool(_LEGACY_STORY_ID_SUFFIX.search(story_id or ""))
+
+
+def _pick_canonical_story_id(entries: list[dict[str, Any]]) -> str:
+    """Choose the story_id to keep when multiple groups share a title."""
+
+    def score(entry: dict[str, Any]) -> tuple[int, int, str]:
+        story_id = str(entry.get("storyId") or "")
+        source = str(entry.get("sourceFileName") or "")
+        title = str(entry.get("storyTitle") or "")
+        points = entry.get("sceneCount", 0) or 0
+        if source:
+            points += 1000
+            if story_id == build_story_id(source, title):
+                points += 500
+        title_slug = _slugify(title)
+        if title_slug and story_id == title_slug:
+            points += 300
+        if not _is_legacy_story_id(story_id):
+            points += 100
+        return (points, entry.get("sceneCount", 0) or 0, story_id)
+
+    return max(entries, key=score)["storyId"]
+
+
+def deduplicate_corpus_stories() -> dict[str, int]:
+    """
+    Remove duplicate story_id groups that share the same story_title (legacy uploads).
+    Keeps the best canonical id per title (stable slug + source file preferred).
+    """
+    if not pinecone_env_configured():
+        return {"removedStoryGroups": 0, "removedVectors": 0}
+
+    index = _get_pinecone_index()
+    namespace = pinecone_namespace()
+    vector_ids, _ = _paginate_vector_ids(index, namespace)
+    if not vector_ids:
+        return {"removedStoryGroups": 0, "removedVectors": 0}
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for vector_id in vector_ids:
+        story_id, _ = _parse_vector_story_key(vector_id)
+        if story_id not in grouped:
+            grouped[story_id] = {
+                "storyId": story_id,
+                "sceneCount": 0,
+                "sampleVectorId": vector_id,
+            }
+        grouped[story_id]["sceneCount"] += 1
+
+    summaries: list[dict[str, Any]] = []
+    if grouped:
+        sample_ids = [info["sampleVectorId"] for info in grouped.values()]
+        try:
+            fetched = index.fetch(ids=sample_ids, namespace=namespace)
+            vectors_map = getattr(fetched, "vectors", None) or {}
+        except Exception:
+            vectors_map = {}
+
+        for story_id, info in grouped.items():
+            raw_vec = vectors_map.get(info["sampleVectorId"]) if isinstance(vectors_map, dict) else None
+            meta = _vector_metadata(raw_vec)
+            summaries.append(
+                {
+                    "storyId": story_id,
+                    "storyTitle": str(meta.get("story_title") or story_id.replace("-", " ").title()),
+                    "sourceFileName": str(meta.get("source_filename") or "") or None,
+                    "sceneCount": info["sceneCount"],
+                }
+            )
+
+    by_title: dict[str, list[dict[str, Any]]] = {}
+    for entry in summaries:
+        key = (entry.get("storyTitle") or entry["storyId"]).strip().lower()
+        by_title.setdefault(key, []).append(entry)
+
+    removed_groups = 0
+    removed_vectors = 0
+    for entries in by_title.values():
+        if len(entries) <= 1:
+            continue
+        canonical = _pick_canonical_story_id(entries)
+        for entry in entries:
+            if entry["storyId"] == canonical:
+                continue
+            _delete_by_metadata_filter(
+                index,
+                namespace,
+                {"story_id": {"$eq": entry["storyId"]}},
+            )
+            removed_groups += 1
+            removed_vectors += int(entry.get("sceneCount") or 0)
+
+    return {"removedStoryGroups": removed_groups, "removedVectors": removed_vectors}
+
+
 def check_pinecone_health() -> dict[str, Any]:
     """Non-secret Pinecone readiness for /api/health."""
     namespace = pinecone_namespace()
@@ -86,20 +288,13 @@ def check_pinecone_health() -> dict[str, Any]:
 
     try:
         index = _get_pinecone_index()
-        stats = index.describe_index_stats()
-        ns_map = stats.get("namespaces", {}) if isinstance(stats, dict) else {}
-        ns_stats = ns_map.get(namespace, {}) if isinstance(ns_map, dict) else {}
-        vector_count = (
-            ns_stats.get("vector_count", 0)
-            if isinstance(ns_stats, dict)
-            else getattr(ns_stats, "vector_count", 0)
-        )
+        vector_count = count_namespace_vectors(index, namespace)
         return {
             "configured": True,
             "reachable": True,
             "namespace": namespace,
             "indexName": index_name,
-            "vectorCount": int(vector_count or 0),
+            "vectorCount": vector_count,
         }
     except Exception as e:
         return {
@@ -198,13 +393,23 @@ def _scene_embed_text(scene: dict) -> str:
     return "\n".join([p for p in parts if p and not p.endswith(":")]).strip()
 
 
-def _delete_story_vectors(index: Any, story_id: str, namespace: str) -> None:
-    """Remove prior vectors for this story before re-upsert (same filename re-ingest)."""
-    try:
-        index.delete(filter={"story_id": {"$eq": story_id}}, namespace=namespace)
-    except Exception:
-        # Best-effort; upsert still overwrites matching vector IDs.
-        pass
+def _clear_story_before_upsert(
+    index: Any,
+    namespace: str,
+    *,
+    story_id: str,
+    source_filename: str = "",
+    story_title: str = "",
+) -> None:
+    """Remove prior vectors for this manuscript (stable id, file, or title)."""
+    _delete_by_metadata_filter(index, namespace, {"story_id": {"$eq": story_id}})
+    if source_filename:
+        _delete_by_metadata_filter(
+            index, namespace, {"source_filename": {"$eq": source_filename}}
+        )
+    title = (story_title or "").strip()
+    if title and title != "Untitled":
+        _delete_by_metadata_filter(index, namespace, {"story_title": {"$eq": title}})
 
 
 def upsert_scenes(
@@ -309,7 +514,13 @@ def upsert_scenes(
         )
 
     try:
-        _delete_story_vectors(index, story_id, namespace)
+        _clear_story_before_upsert(
+            index,
+            namespace,
+            story_id=story_id,
+            source_filename=source_filename,
+            story_title=story_title,
+        )
         embeddings = _embed_texts(embed_texts)
         if len(embeddings) != len(vectors_payload):
             raise RuntimeError(
@@ -351,3 +562,132 @@ def upsert_scenes(
         error=error,
         replaced=True,
     )
+
+
+def _parse_vector_story_key(vector_id: str) -> tuple[str, str | None]:
+    """Return (story_id, scene_id) from vector id ``{story_id}::{scene_id}``."""
+    if "::" in vector_id:
+        story_id, scene_id = vector_id.split("::", 1)
+        return story_id, scene_id or None
+    return vector_id, None
+
+
+def _vector_metadata(raw_vec: Any) -> dict[str, Any]:
+    if raw_vec is None:
+        return {}
+    if isinstance(raw_vec, dict):
+        meta = raw_vec.get("metadata")
+        return meta if isinstance(meta, dict) else {}
+    meta = getattr(raw_vec, "metadata", None)
+    return meta if isinstance(meta, dict) else {}
+
+
+def list_corpus_stories(*, dedupe: bool = True) -> dict[str, Any]:
+    """
+    List stories stored in Pinecone by aggregating scene vectors in the active namespace.
+    """
+    namespace = pinecone_namespace()
+    dedupe_stats = {"removedStoryGroups": 0, "removedVectors": 0}
+    if dedupe:
+        dedupe_stats = deduplicate_corpus_stories()
+
+    if not pinecone_env_configured():
+        return {
+            "configured": False,
+            "namespace": namespace,
+            "stories": [],
+            "summary": {"storyCount": 0, "totalScenes": 0, "totalVectors": 0},
+            "dedupe": dedupe_stats,
+            "error": "Pinecone not configured: set PINECONE_API_KEY and PINECONE_INDEX_NAME.",
+        }
+
+    page_size = _list_page_size()
+    max_pages = _list_max_pages()
+
+    try:
+        index = _get_pinecone_index()
+    except Exception as e:
+        return {
+            "configured": True,
+            "namespace": namespace,
+            "stories": [],
+            "summary": {"storyCount": 0, "totalScenes": 0, "totalVectors": 0},
+            "dedupe": dedupe_stats,
+            "error": str(e),
+        }
+
+    grouped: dict[str, dict[str, Any]] = {}
+    truncated = False
+
+    try:
+        vector_ids, truncated = _paginate_vector_ids(index, namespace)
+    except Exception as e:
+        return {
+            "configured": True,
+            "namespace": namespace,
+            "stories": [],
+            "summary": {"storyCount": 0, "totalScenes": 0, "totalVectors": 0},
+            "dedupe": dedupe_stats,
+            "error": f"Failed to list vectors: {e}",
+        }
+
+    total_vectors = len(vector_ids)
+    for vector_id in vector_ids:
+        story_id, _scene_id = _parse_vector_story_key(vector_id)
+        if story_id not in grouped:
+            grouped[story_id] = {
+                "storyId": story_id,
+                "sceneCount": 0,
+                "sampleVectorId": vector_id,
+            }
+        grouped[story_id]["sceneCount"] += 1
+
+    stories: list[dict[str, Any]] = []
+    if grouped:
+        sample_ids = [info["sampleVectorId"] for info in grouped.values()]
+        try:
+            fetched = index.fetch(ids=sample_ids, namespace=namespace)
+            vectors_map = getattr(fetched, "vectors", None) or {}
+        except Exception:
+            vectors_map = {}
+
+        for story_id, info in grouped.items():
+            sample_id = info["sampleVectorId"]
+            raw_vec = vectors_map.get(sample_id) if isinstance(vectors_map, dict) else None
+            meta = _vector_metadata(raw_vec)
+
+            title = str(meta.get("story_title") or story_id.replace("-", " ").title())
+            source = str(meta.get("source_filename") or "")
+            analysis_mode = str(meta.get("analysis_mode") or "")
+
+            stories.append(
+                {
+                    "storyId": story_id,
+                    "storyTitle": title,
+                    "sourceFileName": source or None,
+                    "sceneCount": info["sceneCount"],
+                    "analysisMode": analysis_mode or None,
+                }
+            )
+
+    stories.sort(key=lambda s: (s.get("storyTitle") or s["storyId"]).lower())
+    total_scenes = sum(s["sceneCount"] for s in stories)
+
+    out: dict[str, Any] = {
+        "configured": True,
+        "namespace": namespace,
+        "stories": stories,
+        "summary": {
+            "storyCount": len(stories),
+            "totalScenes": total_scenes,
+            "totalVectors": total_vectors,
+        },
+        "dedupe": dedupe_stats,
+    }
+    if truncated:
+        out["truncated"] = True
+        out["warning"] = (
+            f"Corpus list capped at {max_pages * page_size} vectors. "
+            "Increase PINECONE_LIST_MAX_PAGES if needed."
+        )
+    return out

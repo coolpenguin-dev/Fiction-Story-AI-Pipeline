@@ -118,4 +118,37 @@ export type BatchAnalyzeResponse = {
   summary: { total: number; succeeded: number; failed: number };
 };
 
+export type StoredStorySummary = {
+  storyId: string;
+  storyTitle: string;
+  sourceFileName?: string | null;
+  sceneCount: number;
+  analysisMode?: AnalysisMode | string | null;
+};
+
+export type CorpusListResponse = {
+  configured: boolean;
+  namespace: string;
+  stories: StoredStorySummary[];
+  summary: {
+    storyCount: number;
+    totalScenes: number;
+    totalVectors: number;
+  };
+  dedupe?: {
+    removedStoryGroups: number;
+    removedVectors: number;
+  };
+  error?: string;
+  warning?: string;
+  truncated?: boolean;
+};
+
 export const MAX_CORPUS_FILES = 5;
+
+export type AnalyzeProgress = {
+  completed: number;
+  total: number;
+  currentFileName: string;
+  percent: number;
+};

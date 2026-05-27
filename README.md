@@ -41,6 +41,8 @@ Open [http://localhost:5173](http://localhost:5173). The dev server proxies `/ap
 
 **Health:** `GET /api/health` reports OpenAI/Pinecone readiness (configured, reachable, namespace vector count).
 
+**Corpus:** `GET /api/corpus` lists all stories stored in Pinecone (title, story ID, scene counts) — visible in the **Stored corpus** panel.
+
 **API:** `POST /api/analyze` (single file) · `POST /api/analyze-batch` (multiple `files` form fields, max 5; processes up to 3 in parallel by default via `ANALYZE_BATCH_CONCURRENCY`).
 
 API keys are sent to the backend for the request only and are **not stored**.

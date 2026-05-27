@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen } from "lucide-react";
-import { analyzePdf, analyzePdfBatch } from "./api/analyze";
+import { analyzePdf } from "./api/analyze";
 import { fetchHealth } from "./api/health";
+import { fetchCorpus } from "./api/corpus";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { CorpusStoryPicker } from "./components/CorpusStoryPicker";
+import { CorpusLibraryPanel } from "./components/CorpusLibraryPanel";
 import { clearSession, loadSession, saveSession } from "./lib/session";
-import type { BatchStoryResult, CorpusEntry, HealthResponse, TabId } from "./types/story";
+import type {
+  BatchStoryResult,
+  AnalyzeProgress,
+  CorpusEntry,
+  CorpusListResponse,
+  HealthResponse,
+  TabId,
+} from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
@@ -29,7 +38,7 @@ export default function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingLabel, setLoadingLabel] = useState<string | null>(null);
+  const [progress, setProgress] = useState<AnalyzeProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [corpus, setCorpus] = useState<CorpusEntry[]>(initial.corpus);
   const [selectedIndex, setSelectedIndex] = useState(initial.selectedIndex);
@@ -38,6 +47,9 @@ export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const [storedCorpus, setStoredCorpus] = useState<CorpusListResponse | null>(null);
+  const [corpusLoading, setCorpusLoading] = useState(true);
+  const [corpusError, setCorpusError] = useState<string | null>(null);
 
   const refreshHealth = useCallback(async () => {
     setHealthLoading(true);
@@ -52,9 +64,23 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    void refreshHealth();
+  const refreshCorpus = useCallback(async () => {
+    setCorpusLoading(true);
+    setCorpusError(null);
+    try {
+      setStoredCorpus(await fetchCorpus());
+    } catch (e) {
+      setCorpusError(e instanceof Error ? e.message : "Failed to load corpus.");
+      setStoredCorpus(null);
+    } finally {
+      setCorpusLoading(false);
+      void refreshHealth();
+    }
   }, [refreshHealth]);
+
+  useEffect(() => {
+    void refreshCorpus();
+  }, [refreshCorpus]);
 
   const selected = corpus[selectedIndex] ?? null;
   const hasResults = corpus.length > 0 && Boolean(selected);
@@ -75,39 +101,46 @@ export default function App() {
     setBatchFailures([]);
     setIsLoading(true);
 
+    const total = files.length;
+    const succeeded: CorpusEntry[] = [];
+    const failures: BatchStoryResult[] = [];
+
     try {
-      if (files.length === 1) {
-        setLoadingLabel("Analyzing manuscript…");
-        const result = await analyzePdf(files[0], apiKey);
-        const entry: CorpusEntry = {
-          fileName: files[0].name,
-          fileSize: files[0].size,
-          data: result,
-          outline: result.outline,
-        };
-        setCorpus([entry]);
-        setSelectedIndex(0);
-        setActiveTab("scenes");
-        return;
-      }
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgress({
+          completed: i,
+          total,
+          currentFileName: file.name,
+          percent: Math.round(((i + 0.5) / total) * 100),
+        });
 
-      setLoadingLabel(`Analyzing ${files.length} manuscripts…`);
-      const batch = await analyzePdfBatch(files, apiKey);
-
-      const succeeded: CorpusEntry[] = [];
-      const failures: BatchStoryResult[] = [];
-
-      for (const item of batch.results) {
-        if (item.ok && item.data) {
-          const match = files.find((f) => f.name === item.fileName);
+        try {
+          const result = await analyzePdf(file, apiKey);
           succeeded.push({
-            fileName: item.fileName,
-            fileSize: match?.size,
-            data: item.data,
-            outline: item.data.outline,
+            fileName: file.name,
+            fileSize: file.size,
+            data: result,
+            outline: result.outline,
           });
-        } else {
-          failures.push(item);
+          setProgress({
+            completed: i + 1,
+            total,
+            currentFileName: file.name,
+            percent: Math.round(((i + 1) / total) * 100),
+          });
+        } catch (e) {
+          failures.push({
+            fileName: file.name,
+            ok: false,
+            error: e instanceof Error ? e.message : "Analysis failed.",
+          });
+          setProgress({
+            completed: i + 1,
+            total,
+            currentFileName: file.name,
+            percent: Math.round(((i + 1) / total) * 100),
+          });
         }
       }
 
@@ -123,17 +156,17 @@ export default function App() {
 
       if (failures.length > 0) {
         setError(
-          `${failures.length} of ${batch.summary.total} file(s) failed. See details below.`
+          `${failures.length} of ${total} file(s) failed. See details below.`
         );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed.");
     } finally {
       setIsLoading(false);
-      setLoadingLabel(null);
-      void refreshHealth();
+      setProgress(null);
+      void refreshCorpus();
     }
-  }, [files, apiKey, refreshHealth]);
+  }, [files, apiKey, refreshCorpus]);
 
   const handleClear = useCallback(() => {
     clearSession();
@@ -188,12 +221,21 @@ export default function App() {
           onGenerate={handleGenerate}
           onClear={handleClear}
           isLoading={isLoading}
-          loadingLabel={loadingLabel}
+          progress={progress}
           error={error}
           canClear={hasResults || files.length > 0}
           health={health}
           healthLoading={healthLoading}
           healthError={healthError}
+          corpusVectorCount={storedCorpus?.summary.totalVectors}
+        />
+
+        <CorpusLibraryPanel
+          corpus={storedCorpus}
+          sessionCorpus={corpus}
+          loading={corpusLoading}
+          error={corpusError}
+          onRefresh={() => void refreshCorpus()}
         />
 
         {hasResults && !isLoading && selected && (
@@ -214,38 +256,7 @@ export default function App() {
             />
           </div>
         )}
-
-        {!hasResults && !isLoading && (
-          <section className="grid gap-4 sm:grid-cols-3 text-center">
-            {[
-              {
-                title: "Multi-story corpus",
-                desc: "Upload 1–5 PDFs for your POC library",
-              },
-              {
-                title: "Narrative patterns",
-                desc: "Discovered per story, stored for retrieval",
-              },
-              {
-                title: "Editable outline",
-                desc: "Premise → chapters → beats per manuscript",
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-xl border border-ink-200/60 bg-white/60 px-4 py-6"
-              >
-                <p className="font-display font-semibold text-ink-900">{item.title}</p>
-                <p className="mt-1 text-xs text-ink-500">{item.desc}</p>
-              </div>
-            ))}
-          </section>
-        )}
       </main>
-
-      <footer className="border-t border-ink-200/60 mt-16 py-6 text-center text-xs text-ink-400">
-        Fiction RAG · Manuscript analysis with Pinecone-backed retrieval
-      </footer>
     </div>
   );
 }

@@ -9,7 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.analyze_job import analyze_pdf_bytes
-from services.pinecone_store import check_pinecone_health
+from services.pinecone_store import check_pinecone_health, list_corpus_stories
 
 load_dotenv()
 
@@ -65,6 +65,11 @@ def _resolve_api_key(openai_api_key: Optional[str]) -> str:
             detail="OpenAI API key required. Enter your key in the app or set OPENAI_API_KEY on the server.",
         )
     return api_key
+
+
+@app.get("/api/corpus")
+def corpus():
+    return list_corpus_stories()
 
 
 @app.post("/api/analyze")
