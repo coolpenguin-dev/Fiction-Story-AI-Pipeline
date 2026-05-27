@@ -36,12 +36,13 @@ Open [http://localhost:5173](http://localhost:5173). The dev server proxies `/ap
 2. Enter your **OpenAI API key** (or set `OPENAI_API_KEY` in `backend/.env`).
 3. Click **Analyze** — each story is analyzed and upserted to Pinecone.
 4. Switch between stories in the corpus picker; browse Scenes, Patterns, Outline, Relationships, Storage.
+5. **Corpus library** (top of page) shows all stories stored in Pinecone; refreshes after each analyze.
 
 **Re-ingest:** uploading the same PDF again uses a **stable story ID** (from the filename) and **replaces** prior vectors for that story in Pinecone.
 
-**Health:** `GET /api/health` reports OpenAI/Pinecone readiness (configured, reachable, namespace vector count).
+**Health:** `GET /api/health` reports OpenAI/Pinecone readiness. The status banner uses corpus vector counts when Pinecone stats are unavailable.
 
-**Corpus:** `GET /api/corpus` lists all stories stored in Pinecone (title, story ID, scene counts).
+**Corpus:** `GET /api/corpus` lists all stories stored in Pinecone (title, story ID, scene counts). Shown in the **Corpus library** panel.
 
 **Retrieval:** `POST /api/retrieve` — semantic search over stored scenes using your editable outline (Outline tab → **Corpus matches**).
 

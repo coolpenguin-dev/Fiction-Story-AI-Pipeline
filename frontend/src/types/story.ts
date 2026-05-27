@@ -162,3 +162,45 @@ export type AnalyzeProgress = {
   currentFileName: string;
   percent: number;
 };
+
+export type HealthResponse = {
+  status: "ok" | "degraded";
+  openai: {
+    configured: boolean;
+    note?: string | null;
+  };
+  pinecone: {
+    configured: boolean;
+    reachable?: boolean;
+    namespace?: string;
+    indexName?: string | null;
+    vectorCount?: number;
+    error?: string;
+  };
+};
+
+export type CorpusStoryRow = {
+  storyId: string;
+  storyTitle: string;
+  sourceFileName?: string | null;
+  sceneCount: number;
+  analysisMode?: AnalysisMode | null;
+};
+
+export type CorpusListResponse = {
+  configured: boolean;
+  namespace?: string;
+  stories: CorpusStoryRow[];
+  summary: {
+    storyCount: number;
+    totalScenes: number;
+    totalVectors: number;
+  };
+  dedupe?: {
+    removedStoryGroups?: number;
+    removedVectors?: number;
+  };
+  truncated?: boolean;
+  warning?: string;
+  error?: string;
+};

@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen } from "lucide-react";
 import { analyzePdf } from "./api/analyze";
+import { fetchCorpus, fetchHealth } from "./api/corpus";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { CorpusStoryPicker } from "./components/CorpusStoryPicker";
+import { CorpusLibraryPanel } from "./components/CorpusLibraryPanel";
+import { IngestionStatusBanner } from "./components/IngestionStatusBanner";
 import { clearSession, loadSession, saveSession } from "./lib/session";
 import type {
   BatchStoryResult,
   AnalyzeProgress,
   CorpusEntry,
+  CorpusListResponse,
   GenerationDraft,
+  HealthResponse,
   TabId,
 } from "./types/story";
 import { EMPTY_GENERATION } from "./types/story";
@@ -40,6 +45,10 @@ export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(initial.selectedIndex);
   const [activeTab, setActiveTab] = useState<TabId>(initial.activeTab);
   const [batchFailures, setBatchFailures] = useState<BatchStoryResult[]>([]);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [pineconeCorpus, setPineconeCorpus] = useState<CorpusListResponse | null>(null);
+  const [infraLoading, setInfraLoading] = useState(true);
+  const [infraError, setInfraError] = useState<string | null>(null);
 
   const selected = corpus[selectedIndex] ?? null;
   const hasResults = corpus.length > 0 && Boolean(selected);
@@ -53,6 +62,24 @@ export default function App() {
     if (corpus.length === 0) return;
     saveSession({ corpus, selectedIndex, activeTab });
   }, [corpus, selectedIndex, activeTab]);
+
+  const refreshInfrastructure = useCallback(async () => {
+    setInfraLoading(true);
+    setInfraError(null);
+    try {
+      const [healthResp, corpusResp] = await Promise.all([fetchHealth(), fetchCorpus()]);
+      setHealth(healthResp);
+      setPineconeCorpus(corpusResp);
+    } catch (e) {
+      setInfraError(e instanceof Error ? e.message : "Failed to load corpus status.");
+    } finally {
+      setInfraLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshInfrastructure();
+  }, [refreshInfrastructure]);
 
   const handleGenerate = useCallback(async () => {
     if (files.length === 0) return;
@@ -119,13 +146,15 @@ export default function App() {
           `${failures.length} of ${total} file(s) failed. See details below.`
         );
       }
+
+      void refreshInfrastructure();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed.");
     } finally {
       setIsLoading(false);
       setProgress(null);
     }
-  }, [files]);
+  }, [files, refreshInfrastructure]);
 
   const handleClear = useCallback(() => {
     clearSession();
@@ -182,7 +211,23 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-10">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-8">
+        <IngestionStatusBanner
+          health={health}
+          corpus={pineconeCorpus}
+          loading={infraLoading}
+          error={infraError}
+          onRefresh={() => void refreshInfrastructure()}
+        />
+
+        <CorpusLibraryPanel
+          corpus={pineconeCorpus}
+          sessionStories={corpus}
+          loading={infraLoading}
+          error={infraError}
+          onRefresh={() => void refreshInfrastructure()}
+        />
+
         <UploadPanel
           files={files}
           onFilesChange={setFiles}
