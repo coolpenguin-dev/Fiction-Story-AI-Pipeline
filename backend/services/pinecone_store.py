@@ -699,13 +699,36 @@ def _build_retrieval_query(
     premise: str = "",
     chapter_outline: str = "",
     scene_beats: str = "",
+    *,
+    focus: str = "full",
 ) -> str:
+    """Build a query string aligned with scene vector embedding format."""
+    p = premise.strip()
+    ch = chapter_outline.strip()
+    sb = scene_beats.strip()
+
+    if focus == "premise":
+        plot_parts = [p] if p else []
+    elif focus == "chapter_outline":
+        plot_parts = [x for x in [ch, p] if x]
+    elif focus == "scene_beats":
+        plot_parts = [x for x in [sb, ch, p] if x]
+    else:
+        plot_parts = [x for x in [p, ch, sb] if x]
+
+    if not plot_parts:
+        return ""
+
+    plot_text = "\n\n".join(plot_parts)
+    relationship_text = p or ch or sb
+    tone_text = sb or ch or p
+
     parts = [
-        premise.strip(),
-        chapter_outline.strip(),
-        scene_beats.strip(),
+        f"Plot: {plot_text}",
+        f"Relationships: {relationship_text}" if relationship_text else "",
+        f"Tone: {tone_text[:240]}" if tone_text else "",
     ]
-    return "\n\n".join(p for p in parts if p)
+    return "\n".join(x for x in parts if x and not x.endswith(": ")).strip()
 
 
 def _format_retrieved_match(meta: dict[str, Any], score: float) -> dict[str, Any]:
@@ -752,6 +775,8 @@ def retrieve_similar_scenes(
     *,
     top_k: int = 5,
     exclude_story_id: str | None = None,
+    same_story_id: str | None = None,
+    min_score: float | None = 0.4,
 ) -> dict[str, Any]:
     """Semantic search over stored scene vectors in Pinecone."""
     namespace = pinecone_namespace()
@@ -774,7 +799,10 @@ def retrieve_similar_scenes(
         }
 
     top_k = max(1, min(20, int(top_k)))
-    over_fetch = top_k + 15 if exclude_story_id else top_k
+    extra = 15 if exclude_story_id else 0
+    extra += 15 if same_story_id else 0
+    extra += 20 if min_score is not None else 0
+    over_fetch = top_k + extra
 
     try:
         embedding = _embed_texts([cleaned])[0]
@@ -796,17 +824,25 @@ def retrieve_similar_scenes(
 
     matches = getattr(resp, "matches", None) or []
     results: list[dict[str, Any]] = []
+    skipped_below_min = 0
     for match in matches:
         meta = _vector_metadata(match)
         if not meta:
             continue
         story_id = str(meta.get("story_id") or "")
-        if exclude_story_id and story_id == exclude_story_id:
+        if same_story_id:
+            if story_id != same_story_id:
+                continue
+        elif exclude_story_id and story_id == exclude_story_id:
             continue
         score = getattr(match, "score", None)
         if score is None and isinstance(match, dict):
             score = match.get("score", 0)
-        results.append(_format_retrieved_match(meta, float(score or 0)))
+        score_f = float(score or 0)
+        if min_score is not None and score_f < min_score:
+            skipped_below_min += 1
+            continue
+        results.append(_format_retrieved_match(meta, score_f))
         if len(results) >= top_k:
             break
 
@@ -817,4 +853,8 @@ def retrieve_similar_scenes(
         "results": results,
         "queryPreview": preview,
         "excludeStoryId": exclude_story_id,
+        "sameStoryId": same_story_id,
+        "minScore": min_score,
+        "skippedBelowMinScore": skipped_below_min,
+        "crossStory": bool(exclude_story_id and not same_story_id),
     }

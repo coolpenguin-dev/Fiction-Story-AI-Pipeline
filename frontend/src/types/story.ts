@@ -53,7 +53,23 @@ export type RetrieveResponse = {
   results: RetrievedScene[];
   queryPreview?: string;
   excludeStoryId?: string | null;
+  sameStoryId?: string | null;
+  minScore?: number | null;
+  skippedBelowMinScore?: number;
+  crossStory?: boolean;
   error?: string;
+};
+
+export type QueryFocus = "premise" | "chapter_outline" | "scene_beats" | "full";
+
+export type RetrievalPreferences = {
+  crossStory: boolean;
+  minScore: number;
+};
+
+export const DEFAULT_RETRIEVAL_PREFS: RetrievalPreferences = {
+  crossStory: true,
+  minScore: 0.4,
 };
 
 export type GenerationMode =
@@ -192,6 +208,7 @@ export type CorpusEntry = {
   generation?: GenerationDraft;
   workflow?: WorkflowState;
   storyState?: StoryState;
+  retrievalPrefs?: RetrievalPreferences;
 };
 
 export type BatchStoryResult = {

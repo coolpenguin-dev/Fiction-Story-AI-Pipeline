@@ -14,7 +14,8 @@ import {
   Wand2,
 } from "lucide-react";
 import { generateFromOutline } from "../api/generate";
-import { retrieveSimilarScenes } from "../api/retrieve";
+import { queryFocusForWorkflowStep, retrieveSimilarScenes } from "../api/retrieve";
+import { RetrievalControls } from "./RetrievalControls";
 import { StoryStatePanel } from "./StoryStatePanel";
 import type {
   GenerationDraft,
@@ -22,6 +23,7 @@ import type {
   GenerationRetrievalUsed,
   OutlineDraft,
   RetrievedScene,
+  RetrievalPreferences,
   StoryState,
   WorkflowApproval,
   WorkflowState,
@@ -35,10 +37,12 @@ type Props = {
   storyId?: string | null;
   storyTitle?: string;
   storyState: StoryState;
+  retrievalPrefs: RetrievalPreferences;
   active: boolean;
   onOutlineChange: (outline: OutlineDraft) => void;
   onGenerationChange: (generation: GenerationDraft) => void;
   onWorkflowChange: (workflow: WorkflowState) => void;
+  onRetrievalPrefsChange: (prefs: RetrievalPreferences) => void;
 };
 
 type StepDef = {
@@ -237,14 +241,17 @@ export function WorkflowStepper({
   storyId,
   storyTitle = "Untitled",
   storyState,
+  retrievalPrefs,
   active,
   onOutlineChange,
   onGenerationChange,
   onWorkflowChange,
+  onRetrievalPrefsChange,
 }: Props) {
   const [results, setResults] = useState<RetrievedScene[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [skippedBelowMin, setSkippedBelowMin] = useState(0);
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [lastSources, setLastSources] = useState<GenerationRetrievalUsed[]>([]);
@@ -273,19 +280,31 @@ export function WorkflowStepper({
     try {
       const resp = await retrieveSimilarScenes(outline, {
         topK: 5,
-        excludeStoryId: storyId ?? null,
+        storyId: storyId ?? null,
+        crossStory: retrievalPrefs.crossStory,
+        minScore: retrievalPrefs.minScore,
+        queryFocus: queryFocusForWorkflowStep(workflow.currentStep),
       });
       setResults(resp.results);
+      setSkippedBelowMin(resp.skippedBelowMinScore ?? 0);
       if (resp.error && resp.results.length === 0) {
         setSearchError(resp.error);
+      } else if (
+        resp.results.length === 0 &&
+        (resp.skippedBelowMinScore ?? 0) > 0
+      ) {
+        setSearchError(
+          `No matches above ${Math.round((retrievalPrefs.minScore || 0.4) * 100)}% similarity. Uncheck "Hide weak matches" or ingest more stories.`
+        );
       }
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "Retrieval failed.");
       setResults([]);
+      setSkippedBelowMin(0);
     } finally {
       setSearchLoading(false);
     }
-  }, [outline, storyId]);
+  }, [outline, storyId, retrievalPrefs, workflow.currentStep]);
 
   useEffect(() => {
     if (!active) return;
@@ -558,7 +577,9 @@ export function WorkflowStepper({
                   Corpus matches
                 </h4>
                 <p className="text-[11px] text-ink-500 truncate">
-                  From other stories · Pinecone
+                  {retrievalPrefs.crossStory
+                    ? "Other manuscripts · Pinecone"
+                    : "This story · analyzed scenes"}
                 </p>
               </div>
             </div>
@@ -578,7 +599,15 @@ export function WorkflowStepper({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <RetrievalControls prefs={retrievalPrefs} onChange={onRetrievalPrefsChange} />
             <StoryStatePanel storyState={storyState} />
+
+            {skippedBelowMin > 0 && results.length > 0 && (
+              <p className="text-[10px] text-ink-500">
+                Hid {skippedBelowMin} weak match{skippedBelowMin === 1 ? "" : "es"} below{" "}
+                {Math.round((retrievalPrefs.minScore || 0.4) * 100)}%.
+              </p>
+            )}
 
             {searchError && (
               <p className="text-xs text-amber-900 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
@@ -598,7 +627,9 @@ export function WorkflowStepper({
                 <Sparkles className="h-8 w-8 text-ink-300" />
                 <p className="mt-3 text-sm font-medium text-ink-700">No matches yet</p>
                 <p className="mt-1 text-xs text-ink-500">
-                  Ingest multiple stories to find cross-manuscript inspiration.
+                  {retrievalPrefs.crossStory
+                    ? "Ingest multiple stories, then edit the outline to find cross-manuscript inspiration."
+                    : "Analyze this story first, then compare your outline to its stored scenes."}
                 </p>
               </div>
             )}

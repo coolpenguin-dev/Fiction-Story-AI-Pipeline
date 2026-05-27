@@ -1,4 +1,4 @@
-import type { OutlineDraft, RetrieveResponse } from "../types/story";
+import type { OutlineDraft, QueryFocus, RetrieveResponse } from "../types/story";
 
 function apiUrl(path: string): string {
   const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -16,8 +16,18 @@ function parseErrorBody(body: unknown, status: number): string {
 
 export async function retrieveSimilarScenes(
   outline: OutlineDraft,
-  options?: { topK?: number; excludeStoryId?: string | null }
+  options?: {
+    topK?: number;
+    storyId?: string | null;
+    crossStory?: boolean;
+    minScore?: number | null;
+    queryFocus?: QueryFocus;
+  }
 ): Promise<RetrieveResponse> {
+  const crossStory = options?.crossStory ?? true;
+  const storyId = options?.storyId ?? null;
+  const minScore = options?.minScore ?? 0.4;
+
   const res = await fetch(apiUrl("/api/retrieve"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -26,7 +36,10 @@ export async function retrieveSimilarScenes(
       chapterOutline: outline.chapterOutline,
       sceneBeats: outline.sceneBeats,
       topK: options?.topK ?? 5,
-      excludeStoryId: options?.excludeStoryId ?? null,
+      excludeStoryId: crossStory ? storyId : storyId,
+      crossStory,
+      minScore: minScore <= 0 ? 0 : minScore,
+      queryFocus: options?.queryFocus ?? "full",
     }),
   });
 
@@ -37,4 +50,17 @@ export async function retrieveSimilarScenes(
   }
 
   return body as RetrieveResponse;
+}
+
+export function queryFocusForWorkflowStep(step: 1 | 2 | 3 | 4): QueryFocus {
+  switch (step) {
+    case 1:
+      return "premise";
+    case 2:
+      return "chapter_outline";
+    case 3:
+      return "scene_beats";
+    default:
+      return "full";
+  }
 }

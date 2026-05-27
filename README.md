@@ -44,7 +44,7 @@ Open [http://localhost:5173](http://localhost:5173). The dev server proxies `/ap
 
 **Corpus:** `GET /api/corpus` lists all stories stored in Pinecone (title, story ID, scene counts). Shown in the **Corpus library** panel.
 
-**Retrieval:** `POST /api/retrieve` — semantic search over stored scenes using your editable outline (Outline tab → **Corpus matches**).
+**Retrieval:** `POST /api/retrieve` — semantic search with **cross-story / same-story** modes, **min similarity filter** (default 40%), and **step-weighted queries** aligned to scene vector format.
 
 **Generation:** `POST /api/generate` — RAG-assisted workflow steps with **persistent story state** (patterns, relationships, open threads from analysis) passed into every generation call.
 

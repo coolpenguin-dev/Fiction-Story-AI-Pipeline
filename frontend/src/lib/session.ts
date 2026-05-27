@@ -1,5 +1,5 @@
 import type { CorpusEntry, GenerationDraft, TabId } from "../types/story";
-import { EMPTY_GENERATION, EMPTY_WORKFLOW } from "../types/story";
+import { EMPTY_GENERATION, EMPTY_WORKFLOW, DEFAULT_RETRIEVAL_PREFS } from "../types/story";
 import { buildStoryState } from "./storyState";
 
 export const SESSION_STORAGE_KEY = "fiction-rag-session";
@@ -34,6 +34,7 @@ function normalizeEntry(entry: CorpusEntry): CorpusEntry {
     },
     workflow: entry.workflow ?? { ...EMPTY_WORKFLOW },
     storyState,
+    retrievalPrefs: entry.retrievalPrefs ?? { ...DEFAULT_RETRIEVAL_PREFS },
   };
 }
 
@@ -64,6 +65,7 @@ export function loadSession(): PersistedSession | null {
           generation: { ...EMPTY_GENERATION },
           workflow: { ...EMPTY_WORKFLOW },
           storyState: buildStoryState(legacy.data),
+          retrievalPrefs: { ...DEFAULT_RETRIEVAL_PREFS },
         }),
       ],
       selectedIndex: 0,

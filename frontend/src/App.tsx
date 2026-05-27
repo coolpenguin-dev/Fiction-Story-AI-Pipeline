@@ -18,8 +18,9 @@ import type {
   HealthResponse,
   TabId,
   WorkflowState,
+  RetrievalPreferences,
 } from "./types/story";
-import { EMPTY_GENERATION, EMPTY_WORKFLOW } from "./types/story";
+import { EMPTY_GENERATION, EMPTY_WORKFLOW, DEFAULT_RETRIEVAL_PREFS } from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
@@ -113,6 +114,7 @@ export default function App() {
             generation: { ...EMPTY_GENERATION },
             workflow: { ...EMPTY_WORKFLOW },
             storyState: result.storyState ?? buildStoryState(result),
+            retrievalPrefs: { ...DEFAULT_RETRIEVAL_PREFS },
           });
           setProgress({
             completed: i + 1,
@@ -203,6 +205,17 @@ export default function App() {
     [selectedIndex]
   );
 
+  const handleRetrievalPrefsChange = useCallback(
+    (retrievalPrefs: RetrievalPreferences) => {
+      setCorpus((prev) =>
+        prev.map((entry, i) =>
+          i === selectedIndex ? { ...entry, retrievalPrefs } : entry
+        )
+      );
+    },
+    [selectedIndex]
+  );
+
   const handleSelectStory = useCallback((index: number) => {
     setSelectedIndex(index);
     setActiveTab("scenes");
@@ -278,6 +291,8 @@ export default function App() {
                 selected.data.storyState ??
                 buildStoryState(selected.data)
               }
+              retrievalPrefs={selected.retrievalPrefs ?? DEFAULT_RETRIEVAL_PREFS}
+              onRetrievalPrefsChange={handleRetrievalPrefsChange}
             />
           </div>
         )}

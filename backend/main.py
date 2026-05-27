@@ -85,11 +85,21 @@ class RetrieveRequest(BaseModel):
     sceneBeats: str = ""
     topK: int = Field(default=5, ge=1, le=20)
     excludeStoryId: str | None = None
+    sameStoryId: str | None = None
+    crossStory: bool = True
+    minScore: float | None = Field(default=0.4, ge=0.0, le=1.0)
+    queryFocus: Literal["premise", "chapter_outline", "scene_beats", "full"] = "full"
 
 
 @app.post("/api/retrieve")
 async def retrieve(body: RetrieveRequest):
     loop = asyncio.get_running_loop()
+    exclude_id = None if body.sameStoryId else (body.excludeStoryId if body.crossStory else None)
+    same_id = body.sameStoryId
+    if not body.crossStory and body.excludeStoryId and not same_id:
+        same_id = body.excludeStoryId
+        exclude_id = None
+    min_score = body.minScore if body.minScore > 0 else None
     return await loop.run_in_executor(
         _executor,
         lambda: retrieve_from_outline(
@@ -97,7 +107,10 @@ async def retrieve(body: RetrieveRequest):
             chapter_outline=body.chapterOutline,
             scene_beats=body.sceneBeats,
             top_k=body.topK,
-            exclude_story_id=body.excludeStoryId,
+            exclude_story_id=exclude_id,
+            same_story_id=same_id,
+            min_score=min_score,
+            query_focus=body.queryFocus,
         ),
     )
 
