@@ -1,19 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen } from "lucide-react";
 import { analyzePdf } from "./api/analyze";
-import { fetchHealth } from "./api/health";
-import { fetchCorpus } from "./api/corpus";
 import { UploadPanel } from "./components/UploadPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { CorpusStoryPicker } from "./components/CorpusStoryPicker";
-import { CorpusLibraryPanel } from "./components/CorpusLibraryPanel";
 import { clearSession, loadSession, saveSession } from "./lib/session";
 import type {
   BatchStoryResult,
   AnalyzeProgress,
   CorpusEntry,
-  CorpusListResponse,
-  HealthResponse,
   TabId,
 } from "./types/story";
 
@@ -36,7 +31,6 @@ function getInitialState() {
 export default function App() {
   const initial = getInitialState();
   const [files, setFiles] = useState<File[]>([]);
-  const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState<AnalyzeProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,43 +38,6 @@ export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(initial.selectedIndex);
   const [activeTab, setActiveTab] = useState<TabId>(initial.activeTab);
   const [batchFailures, setBatchFailures] = useState<BatchStoryResult[]>([]);
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [healthLoading, setHealthLoading] = useState(true);
-  const [healthError, setHealthError] = useState<string | null>(null);
-  const [storedCorpus, setStoredCorpus] = useState<CorpusListResponse | null>(null);
-  const [corpusLoading, setCorpusLoading] = useState(true);
-  const [corpusError, setCorpusError] = useState<string | null>(null);
-
-  const refreshHealth = useCallback(async () => {
-    setHealthLoading(true);
-    setHealthError(null);
-    try {
-      setHealth(await fetchHealth());
-    } catch (e) {
-      setHealthError(e instanceof Error ? e.message : "Health check failed.");
-      setHealth(null);
-    } finally {
-      setHealthLoading(false);
-    }
-  }, []);
-
-  const refreshCorpus = useCallback(async () => {
-    setCorpusLoading(true);
-    setCorpusError(null);
-    try {
-      setStoredCorpus(await fetchCorpus());
-    } catch (e) {
-      setCorpusError(e instanceof Error ? e.message : "Failed to load corpus.");
-      setStoredCorpus(null);
-    } finally {
-      setCorpusLoading(false);
-      void refreshHealth();
-    }
-  }, [refreshHealth]);
-
-  useEffect(() => {
-    void refreshCorpus();
-  }, [refreshCorpus]);
 
   const selected = corpus[selectedIndex] ?? null;
   const hasResults = corpus.length > 0 && Boolean(selected);
@@ -116,7 +73,7 @@ export default function App() {
         });
 
         try {
-          const result = await analyzePdf(file, apiKey);
+          const result = await analyzePdf(file);
           succeeded.push({
             fileName: file.name,
             fileSize: file.size,
@@ -164,9 +121,8 @@ export default function App() {
     } finally {
       setIsLoading(false);
       setProgress(null);
-      void refreshCorpus();
     }
-  }, [files, apiKey, refreshCorpus]);
+  }, [files]);
 
   const handleClear = useCallback(() => {
     clearSession();
@@ -216,26 +172,12 @@ export default function App() {
         <UploadPanel
           files={files}
           onFilesChange={setFiles}
-          apiKey={apiKey}
-          onApiKeyChange={setApiKey}
           onGenerate={handleGenerate}
           onClear={handleClear}
           isLoading={isLoading}
           progress={progress}
           error={error}
           canClear={hasResults || files.length > 0}
-          health={health}
-          healthLoading={healthLoading}
-          healthError={healthError}
-          corpusVectorCount={storedCorpus?.summary.totalVectors}
-        />
-
-        <CorpusLibraryPanel
-          corpus={storedCorpus}
-          sessionCorpus={corpus}
-          loading={corpusLoading}
-          error={corpusError}
-          onRefresh={() => void refreshCorpus()}
         />
 
         {hasResults && !isLoading && selected && (

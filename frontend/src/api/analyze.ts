@@ -20,16 +20,12 @@ function parseErrorBody(body: unknown, status: number): string {
 
 export async function analyzePdf(
   file: File,
-  apiKey?: string,
   analysisMode: AnalysisMode = "linear_choice_1"
 ): Promise<StoryAnalysis> {
   const form = new FormData();
   form.append("file", file);
   form.append("analysis_mode", analysisMode);
   form.append("persist_to_pinecone", "true");
-  if (apiKey?.trim()) {
-    form.append("openai_api_key", apiKey.trim());
-  }
 
   const res = await fetch(apiUrl("/api/analyze"), {
     method: "POST",
@@ -47,7 +43,6 @@ export async function analyzePdf(
 
 export async function analyzePdfBatch(
   files: File[],
-  apiKey?: string,
   analysisMode: AnalysisMode = "linear_choice_1"
 ): Promise<BatchAnalyzeResponse> {
   const form = new FormData();
@@ -56,9 +51,6 @@ export async function analyzePdfBatch(
   }
   form.append("analysis_mode", analysisMode);
   form.append("persist_to_pinecone", "true");
-  if (apiKey?.trim()) {
-    form.append("openai_api_key", apiKey.trim());
-  }
 
   const res = await fetch(apiUrl("/api/analyze-batch"), {
     method: "POST",

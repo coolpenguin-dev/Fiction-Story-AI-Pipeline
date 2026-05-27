@@ -57,19 +57,6 @@ export type PineconeInfo = {
   error?: string;
 };
 
-export type HealthResponse = {
-  status: "ok" | "degraded";
-  openai: { configured: boolean; note?: string | null };
-  pinecone: {
-    configured: boolean;
-    reachable?: boolean;
-    namespace?: string;
-    indexName?: string | null;
-    vectorCount?: number;
-    error?: string;
-  };
-};
-
 export type IngestionRecommendation = {
   chunkLevel: string;
   metadataFields: string[];
@@ -116,32 +103,6 @@ export type BatchStoryResult = {
 export type BatchAnalyzeResponse = {
   results: BatchStoryResult[];
   summary: { total: number; succeeded: number; failed: number };
-};
-
-export type StoredStorySummary = {
-  storyId: string;
-  storyTitle: string;
-  sourceFileName?: string | null;
-  sceneCount: number;
-  analysisMode?: AnalysisMode | string | null;
-};
-
-export type CorpusListResponse = {
-  configured: boolean;
-  namespace: string;
-  stories: StoredStorySummary[];
-  summary: {
-    storyCount: number;
-    totalScenes: number;
-    totalVectors: number;
-  };
-  dedupe?: {
-    removedStoryGroups: number;
-    removedVectors: number;
-  };
-  error?: string;
-  warning?: string;
-  truncated?: boolean;
 };
 
 export const MAX_CORPUS_FILES = 5;

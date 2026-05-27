@@ -40,29 +40,33 @@ _executor = ThreadPoolExecutor(max_workers=BATCH_CONCURRENCY)
 
 @app.get("/api/health")
 def health():
-    openai_configured = bool(os.getenv("OPENAI_API_KEY", "").strip())
+    llm_configured = _llm_api_key_configured()
     pinecone = check_pinecone_health()
-    ready = openai_configured and (
+    ready = llm_configured and (
         not pinecone.get("configured") or pinecone.get("reachable") is True
     )
     return {
         "status": "ok" if ready else "degraded",
         "openai": {
-            "configured": openai_configured,
+            "configured": llm_configured,
             "note": None
-            if openai_configured
-            else "Set OPENAI_API_KEY on server or pass key in the upload form.",
+            if llm_configured
+            else "Set OPENAI_API_KEY in backend/.env.",
         },
         "pinecone": pinecone,
     }
 
 
-def _resolve_api_key(openai_api_key: Optional[str]) -> str:
-    api_key = (openai_api_key or "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
+def _llm_api_key_configured() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY", "").strip())
+
+
+def _resolve_api_key() -> str:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="OpenAI API key required. Enter your key in the app or set OPENAI_API_KEY on the server.",
+            detail="OpenAI API key required. Set OPENAI_API_KEY in backend/.env.",
         )
     return api_key
 
@@ -75,7 +79,6 @@ def corpus():
 @app.post("/api/analyze")
 async def analyze(
     file: UploadFile = File(...),
-    openai_api_key: Optional[str] = Form(None),
     analysis_mode: Optional[str] = Form("linear_choice_1"),
     persist_to_pinecone: Optional[bool] = Form(False),
 ):
@@ -83,7 +86,7 @@ async def analyze(
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
 
     content = await file.read()
-    api_key = _resolve_api_key(openai_api_key)
+    api_key = _resolve_api_key()
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor,
@@ -101,7 +104,6 @@ async def analyze(
 @app.post("/api/analyze-batch")
 async def analyze_batch(
     files: list[UploadFile] = File(...),
-    openai_api_key: Optional[str] = Form(None),
     analysis_mode: Optional[str] = Form("linear_choice_1"),
     persist_to_pinecone: Optional[bool] = Form(False),
 ):
@@ -114,7 +116,7 @@ async def analyze_batch(
             detail=f"Maximum {MAX_BATCH_FILES} PDFs per batch (POC limit).",
         )
 
-    api_key = _resolve_api_key(openai_api_key)
+    api_key = _resolve_api_key()
     persist = bool(persist_to_pinecone)
 
     # Read all uploads first so analysis workers are not blocked on I/O.

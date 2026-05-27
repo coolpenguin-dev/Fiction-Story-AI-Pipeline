@@ -1,33 +1,23 @@
 import { useRef, useState } from "react";
 import {
-  Eye,
-  EyeOff,
   FileText,
-  KeyRound,
   Sparkles,
   Trash2,
   Upload,
   X,
 } from "lucide-react";
 import { MAX_CORPUS_FILES } from "../types/story";
-import type { AnalyzeProgress, HealthResponse } from "../types/story";
-import { IngestionStatusBanner } from "./IngestionStatusBanner";
+import type { AnalyzeProgress } from "../types/story";
 
 type Props = {
   files: File[];
   onFilesChange: (files: File[]) => void;
-  apiKey: string;
-  onApiKeyChange: (key: string) => void;
   onGenerate: () => void;
   onClear: () => void;
   isLoading: boolean;
   progress: AnalyzeProgress | null;
   error: string | null;
   canClear: boolean;
-  health: HealthResponse | null;
-  healthLoading: boolean;
-  healthError: string | null;
-  corpusVectorCount?: number | null;
 };
 
 function formatSize(bytes: number): string {
@@ -42,22 +32,15 @@ const PRIMARY_ACTION_CLASS =
 export function UploadPanel({
   files,
   onFilesChange,
-  apiKey,
-  onApiKeyChange,
   onGenerate,
   onClear,
   isLoading,
   progress,
   error,
   canClear,
-  health,
-  healthLoading,
-  healthError,
-  corpusVectorCount,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [showKey, setShowKey] = useState(false);
 
   const atLimit = files.length >= MAX_CORPUS_FILES;
 
@@ -108,13 +91,6 @@ export function UploadPanel({
       </div>
 
       <div className="p-6 space-y-5">
-        <IngestionStatusBanner
-          health={health}
-          loading={healthLoading}
-          error={healthError}
-          corpusVectorCount={corpusVectorCount}
-        />
-
         <div
           role="button"
           tabIndex={0}
@@ -203,44 +179,6 @@ export function UploadPanel({
             ))}
           </ul>
         )}
-
-        <div>
-          <label
-            htmlFor="api-key"
-            className="flex items-center gap-2 field-label mb-2"
-          >
-            <KeyRound className="h-3.5 w-3.5" />
-            OpenAI API key
-          </label>
-          <div className="relative">
-            <input
-              id="api-key"
-              type={showKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => onApiKeyChange(e.target.value)}
-              placeholder="sk-… (optional if set on server)"
-              autoComplete="off"
-              className="w-full rounded-xl border border-ink-200 bg-ink-50/50 px-4 py-3 pr-12 text-sm
-                placeholder:text-ink-400 focus:border-accent focus:bg-white focus:outline-none
-                focus:ring-2 focus:ring-accent/20 transition-all"
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-ink-400 hover:text-ink-700 transition-colors"
-              aria-label={showKey ? "Hide API key" : "Show API key"}
-            >
-              {showKey ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-          <p className="mt-1.5 text-xs text-ink-500">
-            Sent securely to the backend for this request only — never stored.
-          </p>
-        </div>
 
         {error && (
           <div
