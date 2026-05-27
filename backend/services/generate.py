@@ -6,7 +6,13 @@ from openai import OpenAI
 from services.openai_retry import call_with_retry
 from services.retrieve import retrieve_from_outline
 
-GenerationMode = Literal["chapter_beats", "opening_draft"]
+GenerationMode = Literal[
+    "premise",
+    "chapter_outline",
+    "scene_beats",
+    "opening_draft",
+    "chapter_beats",
+]
 
 SYSTEM_PROMPT = """You are a fiction writing assistant for interactive / branching manuscripts.
 
@@ -20,6 +26,57 @@ Rules:
 - Do NOT import characters, names, or plot events from reference stories.
 - Write in the same narrative mode implied by the outline (e.g. third-person literary vs second-person interactive).
 - Output plain text or markdown only — no JSON fences unless asked."""
+
+USER_TEMPLATE_PREMISE = """Write or refine a one-paragraph story premise for the manuscript below.
+
+One paragraph only. Capture core conflict, emotional promise, and protagonist situation.
+
+STORY TITLE: {story_title}
+
+CURRENT PREMISE (author draft — improve or replace):
+{premise}
+
+CORPUS REFERENCE SCENES (tone/structure inspiration only — do not copy plot):
+{references}
+
+Return the premise paragraph only."""
+
+USER_TEMPLATE_CHAPTER_OUTLINE = """Expand the premise into a chapter-level outline.
+
+Use numbered chapters (Chapter 1, Chapter 2, …). One or two sentences per chapter describing the arc beat.
+
+STORY TITLE: {story_title}
+
+PREMISE:
+{premise}
+
+CURRENT CHAPTER OUTLINE (author draft — improve or replace):
+{chapter_outline}
+
+CORPUS REFERENCE SCENES (pacing inspiration only — do not copy plot):
+{references}
+
+Return the chapter outline only."""
+
+USER_TEMPLATE_SCENE_BEATS = """Write granular opening-scene beats for the story below.
+
+Use numbered scenes or bullet beats for the opening act (typically 3–8 beats). Actionable for drafting.
+
+STORY TITLE: {story_title}
+
+PREMISE:
+{premise}
+
+CHAPTER OUTLINE:
+{chapter_outline}
+
+CURRENT SCENE BEATS (author draft — improve or replace):
+{scene_beats}
+
+CORPUS REFERENCE SCENES (beat rhythm inspiration only — do not copy plot):
+{references}
+
+Return the scene beats only."""
 
 USER_TEMPLATE_CHAPTER_BEATS = """Generate detailed chapter beats for the story below.
 
@@ -64,6 +121,14 @@ CORPUS REFERENCE SCENES (craft inspiration only — do not copy plot or characte
 Write the opening draft now."""
 
 MAX_REFERENCE_SCENES = 5
+
+_TEMPLATES: dict[GenerationMode, str] = {
+    "premise": USER_TEMPLATE_PREMISE,
+    "chapter_outline": USER_TEMPLATE_CHAPTER_OUTLINE,
+    "scene_beats": USER_TEMPLATE_SCENE_BEATS,
+    "chapter_beats": USER_TEMPLATE_CHAPTER_BEATS,
+    "opening_draft": USER_TEMPLATE_OPENING_DRAFT,
+}
 
 
 def _format_references(scenes: list[dict[str, Any]]) -> str:
@@ -110,6 +175,21 @@ def _resolve_retrieved_scenes(
     return results, retrieval
 
 
+def _validate_mode_inputs(mode: GenerationMode, story_title: str, premise: str, chapter_outline: str, scene_beats: str) -> str | None:
+    title = story_title.strip()
+    if mode == "premise":
+        if not title and not premise.strip():
+            return "Add a story title or seed premise before generating."
+        return None
+    if mode == "chapter_outline" and not premise.strip():
+        return "Complete and approve the premise step before generating chapters."
+    if mode in ("scene_beats", "chapter_beats") and not chapter_outline.strip() and not premise.strip():
+        return "Add a chapter outline or premise before generating scene beats."
+    if mode == "opening_draft" and not scene_beats.strip() and not chapter_outline.strip():
+        return "Add scene beats or a chapter outline before generating the opening draft."
+    return None
+
+
 def generate_from_outline(
     *,
     mode: GenerationMode,
@@ -122,13 +202,15 @@ def generate_from_outline(
     exclude_story_id: str | None = None,
     top_k: int = 5,
 ) -> dict[str, Any]:
-    outline_parts = [premise.strip(), chapter_outline.strip(), scene_beats.strip()]
-    if not any(outline_parts):
+    validation_error = _validate_mode_inputs(
+        mode, story_title, premise, chapter_outline, scene_beats
+    )
+    if validation_error:
         return {
             "ok": False,
             "mode": mode,
             "content": "",
-            "error": "Add premise, chapter outline, or scene beats before generating.",
+            "error": validation_error,
             "retrievalUsed": [],
         }
 
@@ -142,16 +224,12 @@ def generate_from_outline(
     )
 
     references = _format_references(scenes)
-    template = (
-        USER_TEMPLATE_OPENING_DRAFT
-        if mode == "opening_draft"
-        else USER_TEMPLATE_CHAPTER_BEATS
-    )
+    template = _TEMPLATES.get(mode, USER_TEMPLATE_CHAPTER_BEATS)
     user_content = template.format(
         story_title=story_title.strip() or "Untitled",
-        premise=premise.strip() or "(not provided)",
-        chapter_outline=chapter_outline.strip() or "(not provided)",
-        scene_beats=scene_beats.strip() or "(not provided)",
+        premise=premise.strip() or "(not provided yet)",
+        chapter_outline=chapter_outline.strip() or "(not provided yet)",
+        scene_beats=scene_beats.strip() or "(not provided yet)",
         references=references,
     )
 
@@ -167,7 +245,7 @@ def generate_from_outline(
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_content},
                 ],
-                temperature=1,
+                temperature=1.0,
             ),
             label="RAG generation",
         )

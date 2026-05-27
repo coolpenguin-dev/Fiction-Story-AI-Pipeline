@@ -1,4 +1,5 @@
-import type { CorpusEntry, TabId } from "../types/story";
+import type { CorpusEntry, GenerationDraft, TabId } from "../types/story";
+import { EMPTY_GENERATION, EMPTY_WORKFLOW } from "../types/story";
 
 export const SESSION_STORAGE_KEY = "fiction-rag-session";
 const LEGACY_OUTLINE_KEY = "fiction-rag-outline";
@@ -20,6 +21,17 @@ export type PersistedSession = {
   savedAt: string;
 };
 
+function normalizeEntry(entry: CorpusEntry): CorpusEntry {
+  const legacyGen = entry.generation as (GenerationDraft & { chapterBeats?: string }) | undefined;
+  return {
+    ...entry,
+    generation: {
+      openingDraft: legacyGen?.openingDraft ?? "",
+    },
+    workflow: entry.workflow ?? { ...EMPTY_WORKFLOW },
+  };
+}
+
 export function loadSession(): PersistedSession | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -29,19 +41,24 @@ export function loadSession(): PersistedSession | null {
     if (Array.isArray((parsed as PersistedSession).corpus)) {
       const session = parsed as PersistedSession;
       if (session.corpus.length === 0) return null;
-      return session;
+      return {
+        ...session,
+        corpus: session.corpus.map(normalizeEntry),
+      };
     }
 
     const legacy = parsed as LegacyPersistedSession;
     if (!legacy?.data?.storyTitle) return null;
     return {
       corpus: [
-        {
+        normalizeEntry({
           fileName: legacy.fileName ?? legacy.data.storyTitle,
           fileSize: legacy.fileSize,
           data: legacy.data,
           outline: legacy.outline ?? legacy.data.outline,
-        },
+          generation: { ...EMPTY_GENERATION },
+          workflow: { ...EMPTY_WORKFLOW },
+        }),
       ],
       selectedIndex: 0,
       activeTab: legacy.activeTab ?? "scenes",

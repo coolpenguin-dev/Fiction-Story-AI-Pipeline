@@ -16,8 +16,9 @@ import type {
   GenerationDraft,
   HealthResponse,
   TabId,
+  WorkflowState,
 } from "./types/story";
-import { EMPTY_GENERATION } from "./types/story";
+import { EMPTY_GENERATION, EMPTY_WORKFLOW } from "./types/story";
 
 function getInitialState() {
   const session = loadSession();
@@ -109,6 +110,7 @@ export default function App() {
             data: result,
             outline: result.outline,
             generation: { ...EMPTY_GENERATION },
+            workflow: { ...EMPTY_WORKFLOW },
           });
           setProgress({
             completed: i + 1,
@@ -188,6 +190,17 @@ export default function App() {
     [selectedIndex]
   );
 
+  const handleWorkflowChange = useCallback(
+    (workflow: WorkflowState) => {
+      setCorpus((prev) =>
+        prev.map((entry, i) =>
+          i === selectedIndex ? { ...entry, workflow } : entry
+        )
+      );
+    },
+    [selectedIndex]
+  );
+
   const handleSelectStory = useCallback((index: number) => {
     setSelectedIndex(index);
     setActiveTab("scenes");
@@ -256,6 +269,8 @@ export default function App() {
               onOutlineChange={handleOutlineChange}
               generation={selected.generation ?? EMPTY_GENERATION}
               onGenerationChange={handleGenerationChange}
+              workflow={selected.workflow ?? EMPTY_WORKFLOW}
+              onWorkflowChange={handleWorkflowChange}
             />
           </div>
         )}

@@ -5,7 +5,7 @@ import {
   Heart,
   Layers,
 } from "lucide-react";
-import type { TabId, StoryAnalysis, GenerationDraft } from "../types/story";
+import type { TabId, StoryAnalysis, GenerationDraft, WorkflowState } from "../types/story";
 import { SceneSummaryList } from "./SceneSummaryList";
 import { NarrativePatternsPanel } from "./NarrativePatternsPanel";
 import { OutlineEditor } from "./OutlineEditor";
@@ -32,6 +32,8 @@ type Props = {
   onOutlineChange: (outline: StoryAnalysis["outline"]) => void;
   generation: GenerationDraft;
   onGenerationChange: (generation: GenerationDraft) => void;
+  workflow: WorkflowState;
+  onWorkflowChange: (workflow: WorkflowState) => void;
 };
 
 export function ResultsPanel({
@@ -42,6 +44,8 @@ export function ResultsPanel({
   onOutlineChange,
   generation,
   onGenerationChange,
+  workflow,
+  onWorkflowChange,
 }: Props) {
   const goToScenes = (sceneId: string) => {
     onTabChange("scenes");
@@ -118,6 +122,8 @@ export function ResultsPanel({
             onChange={onOutlineChange}
             generation={generation}
             onGenerationChange={onGenerationChange}
+            workflow={workflow}
+            onWorkflowChange={onWorkflowChange}
           />
         )}
         {activeTab === "relationships" && (

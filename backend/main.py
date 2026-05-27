@@ -113,7 +113,13 @@ class RetrievedSceneInput(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    mode: Literal["chapter_beats", "opening_draft"] = "chapter_beats"
+    mode: Literal[
+        "premise",
+        "chapter_outline",
+        "scene_beats",
+        "opening_draft",
+        "chapter_beats",
+    ] = "premise"
     storyTitle: str = ""
     storyId: str | None = None
     premise: str = ""

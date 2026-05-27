@@ -56,15 +56,42 @@ export type RetrieveResponse = {
   error?: string;
 };
 
-export type GenerationMode = "chapter_beats" | "opening_draft";
+export type GenerationMode =
+  | "premise"
+  | "chapter_outline"
+  | "scene_beats"
+  | "opening_draft"
+  | "chapter_beats";
+
+export type WorkflowStepId = 1 | 2 | 3 | 4;
+
+export type WorkflowApproval = {
+  premise: boolean;
+  chapterOutline: boolean;
+  sceneBeats: boolean;
+  openingDraft: boolean;
+};
+
+export type WorkflowState = {
+  currentStep: WorkflowStepId;
+  approved: WorkflowApproval;
+};
+
+export const EMPTY_WORKFLOW: WorkflowState = {
+  currentStep: 1,
+  approved: {
+    premise: false,
+    chapterOutline: false,
+    sceneBeats: false,
+    openingDraft: false,
+  },
+};
 
 export type GenerationDraft = {
-  chapterBeats: string;
   openingDraft: string;
 };
 
 export const EMPTY_GENERATION: GenerationDraft = {
-  chapterBeats: "",
   openingDraft: "",
 };
 
@@ -140,6 +167,7 @@ export type CorpusEntry = {
   data: StoryAnalysis;
   outline: OutlineDraft;
   generation?: GenerationDraft;
+  workflow?: WorkflowState;
 };
 
 export type BatchStoryResult = {
